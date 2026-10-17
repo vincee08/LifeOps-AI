@@ -1,0 +1,57 @@
+# Database design (proposed; no migrations yet)
+
+## Conventions and boundaries
+
+PostgreSQL stores personal productivity records, not lender accounts, loan applications, credit scores, payment instruments, transfers, or bank ledgers. All IDs are UUIDs. User-owned rows have `user_id uuid not null references auth.users(id)`, except `profiles.id`, which is the user ID. Editable rows carry `created_at`, `updated_at`, and an optimistic version. UTC `timestamptz` stores events; `date` plus optional local `time` stores calendar commitments interpreted in the profile's IANA timezone.
+
+All currency uses `bigint` integer minor units; JSON encodes centavos as base-10 integer strings. V1 defaults to PHP centavos only, with a currency code kept for future expansion; the UI formats ₱ where appropriate. Never use floating-point money, foreign exchange conversion, or mixed-currency totals. Check positivity, text lengths, legal status transitions, and overflow. Composite `(user_id, id)` parent keys/FKs prevent cross-user relationships. Corrections may void/replace records; explicit user deletion removes selected histories, and account deletion removes all owned content.
+
+## Source tables
+
+The table list is conceptual, not migration SQL. Every listed user-owned table, including `app_private` tables, must have RLS. Internal jobs/tokens have no direct client grants.
+
+| Table | Essential fields and relationships |
+| --- | --- |
+| `profiles` | `id = auth.users.id`, IANA timezone, preferred currency (`PHP` in V1), notification preference |
+| `projects` | `user_id`, title, description, active/archived state; groups work tasks |
+| `task_series` | `user_id`, title/description/category/context/priority, optional project, anchor local date/time, rule (`daily/weekly/monthly`), active state |
+| `tasks` | `user_id`, optional series/project IDs, ordinal for recurring instance, title/description/category, context (`personal/work`), priority, optional `due_on` and `due_local_time`, optional reminder local time (requires `due_on`), status (`open/completed/skipped`), completed timestamp; unique `(series_id, ordinal)` and owner-matched FKs |
+| `bills` | `user_id`, title, category, default `amount_minor > 0`, currency, notes, anchor due date, rule (`once/weekly/monthly/yearly`), reminder offsets, archived timestamp |
+| `bill_occurrences` | `user_id`, bill ID, ordinal, `due_on`, editable `amount_minor > 0`, status (`unpaid/paid`), `paid_at`; unique `(bill_id, ordinal)`, owner-matched bill FK |
+| `debts` | `user_id`, title, optional creditor label, `opening_tracked_balance_minor > 0` (current balance at setup), optional `original_amount_minor > 0` (reference only), currency, anchor due date, `expected_installment_minor > 0` required if recurring, rule (`once/weekly/monthly`), notes, archived timestamp; one-time due defaults to tracked balance |
+| `debt_due_occurrences` | `user_id`, debt ID, ordinal, `due_on`, `expected_minor > 0`, schedule version; unique `(debt_id, ordinal)`, owner-matched debt FK |
+| `debt_payments` | `user_id`, debt ID, outside `paid_on`, `amount_minor > 0`, status (`posted/voided`), void reason/time, replacement link, permanent unique `origin_command_id`; owner-matched debt FK |
+| `debt_balance_adjustments` | `user_id`, debt ID, signed nonzero `delta_minor`, recorded date, note/reason, void/replacement details, permanent unique `origin_command_id`; manual reconciliation only, owner-matched debt FK |
+| `categories` | `user_id`, name, kind (`income/expense`), archived timestamp; only for recorded transactions |
+| `financial_transactions` | `user_id`, kind (`income/expense`), `amount_minor > 0`, currency, category, `occurred_on`, optional note, optional `bill_occurrence_id` **or** `debt_payment_id`, status (`posted/voided`), void/replacement details, permanent unique `origin_command_id`; owner-matched FKs; links allowed for expenses only, with at most one posted expense per source |
+| `budgets` | `user_id`, local month start date, currency, optional owner-matched expense category ID (`NULL` = overall), `limit_minor > 0`; one overall and one per category/month |
+| `focus_sessions` | `user_id`, optional task/project ID, start/end timestamps, state; owner-matched FKs |
+| `workout_templates` / `template_exercises` | `user_id`, template/name/order, target sets/reps, optional weight grams; owner-matched template FK |
+| `planned_workouts` | `user_id`, local `planned_on` date, optional template, status (`planned/completed/skipped`), optional linked session ID; one plan completion, owner-matched FKs |
+| `workout_sessions` / `workout_sets` | `user_id`, optional template/plan, start/end/state/proof status (`none/challenge_issued/captured/expired/technical_rejected`); exercise name, set number, reps, optional weight grams; owner-matched FKs |
+| `proof_challenges` / `proof_captures` | `user_id`, owned session, random gesture, issue/expiry/consume times, nonce hash; private image/thumbnail paths, server upload time, client capture time (informational), MIME/size/dimensions, technical capture status; one capture per challenge; no MVP gesture-match result |
+| `ai_conversations` / `ai_messages` | `user_id`, conversation/role/content/timestamps, bounded content; retain until the user deletes the conversation/account |
+| `ai_action_proposals` | `user_id`, action type, validated payload, owner-scoped candidate IDs, 15-minute expiry, state and confirmation command ID; one consumption |
+| `app_private.command_receipts` | `user_id`, operation, idempotency key, request hash, state/result/expiry; unique `(user_id, operation, idempotency_key)` |
+| `app_private.reminder_jobs` | `user_id`, exactly one owner-matched target FK (`task_id`, `bill_occurrence_id`, or `debt_occurrence_id`), schedule version, slot key, UTC run time, state/provider receipt, unique logical dispatch key |
+| `app_private.notification_devices` | `user_id`, device ID, push token, permission state, last seen; server-only token access |
+
+For budgets, use partial unique indexes: one `(user_id, currency, month)` where category is `NULL`, and one `(user_id, currency, month, category_id)` where category is present. Category IDs must be expense categories belonging to the same user. Supabase Auth owns auth tables. Supabase Storage owns object metadata; proof images and thumbnails are in a private bucket with owner-scoped Storage policies, not Postgres byte columns.
+
+## Task, bill, and debt rules
+
+- Each recurring source has a fixed local calendar anchor and stable ordinal. Generate tasks through 30 days and bills/debt dues through 90 days, plus the immediate next occurrence when farther away. Use unique source/ordinal keys. Rule edits affect future incomplete instances; completed history remains. Missed task occurrences stay overdue rather than disappearing. Monthly/yearly dates clamp at month end.
+- Marking `bill_occurrences.paid` or posting `debt_payments` never inserts `financial_transactions` by default. An optional, separately confirmed action uses the normal transaction service to create one source-linked expense or link an existing owner-owned posted expense; idempotency and partial unique posted-link indexes prevent another linked expense. Show likely same-date/amount expenses before creating one. When a linked source is corrected/reopened/deleted, require an explicit keep-and-unlink or void-expense choice. Deleting a bill/debt removes its own history but leaves a kept expense with a cleared source link. A debt due shown in Money/Today is never a duplicate bill row.
+- `paid_minor = sum(posted debt_payments.amount_minor)`, `adjusted_total_minor = opening_tracked_balance_minor + sum(active signed adjustments)`, and `remaining_minor = adjusted_total_minor - paid_minor`. Lock the debt and reject writes making the total or remaining negative. `original_amount_minor` is reference only. For due ordinal `n`, `cumulative_due_n = sum(expected_minor through n)`; it is satisfied when `paid_minor >= cumulative_due_n` or `remaining_minor = 0`. Reconcile unpaid future due amounts to the adjusted total; preserve completed history. Partial payments remain due. Tracked payment progress is integer basis points from `paid_minor / (paid_minor + remaining_minor)` when the denominator is positive; if both are zero after an adjustment, show closed without a percentage.
+- A payoff estimate derives only from current tracked remaining, fixed planned payment amount, and frequency, with the stated no-new-interest/fee/adjustment assumption. It is not an authoritative lender balance. No automatic interest or penalty accrual exists. “Spent this month” means posted expense transactions, including explicitly linked ones.
+- Budget spent is the sum of posted expenses in the user's local calendar month (optionally filtered to one category). `remaining_minor = limit_minor - spent_minor` may be negative. `percent_used_bp = floor(spent_minor * 10000 / limit_minor)` may exceed 10000; display as percent without floating-point currency calculations. Overall and category budgets reuse the same transactions and are never summed as separate spending.
+- Retain tasks/completed history, bill/debt/payment histories, transactions, workouts, and AI conversations until user deletion. Proof images remain while their proof exists; deleting proof alone clears its workout proof status and removes private objects, while deleting a workout/account removes associated proof and objects. Deletion workers are idempotent and clean orphan objects. Do not keep private prompt/image content in provider/debug logs.
+- Reminder jobs are generated for bills/debt at offsets `2/1/0` local calendar days at 09:00, or at an opted-in task reminder time. A source status or schedule change cancels obsolete unsent jobs. The worker claims a bounded pending batch, rechecks source status, and treats ambiguous provider sends as `unknown` instead of blind retry.
+
+## Access and query plan
+
+Enable RLS before granting reads. Owner policies compare `(select auth.uid())` with `user_id` or `profiles.id`; direct client business-table DML is denied. Exposed summaries/views must use caller RLS (`security_invoker` where applicable). Private transactional functions run through a restricted server-only role with named `EXECUTE` grants, fixed search path, revoked `PUBLIC EXECUTE`, and explicit owner checks. Never authorize from editable JWT metadata.
+
+Initial indexes follow actual screens: `tasks(user_id, status, due_on, due_local_time, id)`, `bill_occurrences(user_id, status, due_on, id)`, `debt_due_occurrences(user_id, due_on, id)`, `planned_workouts(user_id, planned_on, id)`, `debt_payments(user_id, debt_id, paid_on DESC, id DESC)`, `debt_balance_adjustments(user_id, debt_id, recorded_on DESC, id DESC)`, `financial_transactions(user_id, occurred_on DESC, id DESC)` plus category filtering, `budgets(user_id, month)`, and partial `reminder_jobs(run_at)` for pending jobs. Index owner/parent FKs. Today queries union bounded owner-scoped source queries; histories use keyset pagination with stable ID tie-breakers. Add other indexes after `EXPLAIN`, not by guesswork.
+
+Before migrations, confirm current [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [Storage access control](https://supabase.com/docs/guides/storage/security/access-control), and [Postgres constraints](https://www.postgresql.org/docs/current/ddl-constraints.html). Policies, grants, and cross-user tests ship with each migration.

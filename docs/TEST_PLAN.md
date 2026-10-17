@@ -1,0 +1,40 @@
+# Test plan and release gates
+
+No tests are implemented yet. Add tests with each vertical slice. Use a local Supabase database, two independent Auth users, fixed clocks/timezones, a fake push service, and (when AI ships) a fake AI provider. No gesture-recognition provider is part of the MVP. Reserve device end-to-end checks for navigation, permissions, camera, backgrounding, and accessibility.
+
+## Product and deterministic tests
+
+| Area | Required scenarios |
+| --- | --- |
+| Today/navigation | Local-day boundaries; overdue/today/next-seven-days/completed sections; personal/work tasks, bills, debt dues, planned/completed workouts; source links and no duplicate shadow records; independent partial failures; bottom tabs Today/Tasks/Money/Workout/AI and profile-menu Settings |
+| Tasks | Personal/work context, category/priority, optional due time, completion/reopen/skip, project link, opt-in reminder, recurring instances generated once; missed instances stay overdue and completed history stays fixed after a series edit |
+| Bills | One-time/weekly/monthly/yearly dates, month-end/yearly leap dates, mark paid/correct/reopen; no expense without explicit default-off confirmation; one linked expense through the normal service or a selected existing expense; likely same-date/amount expense is shown before creation; source correction/deletion offers keep/unlink or void; debt dues appear without duplicate bill rows |
+| Debt tracker | Optional original amount separate from setup current balance; signed manual adjustment and audit; integer remaining/paid/progress; cumulative earliest-due satisfaction, partial/early/extra outside payments, payoff/archival, no automatic interest/penalty, estimate only with fixed reliable inputs; concurrent posts cannot overpay; no automatic expense and at most one explicitly linked new or existing expense |
+| Money/budgets | Parse PHP decimal strings exactly; format ₱; reject extra decimals, invalid sign, overflow and unsupported currency; no FX or mixed total; recorded-spending local-month boundaries, filters/pagination, retries create one entry; optional overall/category budgets show spent, signed remaining, integer percentage, over-budget state and no double-counting between budget views |
+| Work/focus | Work tasks agree with Today and project filters; timer completion once, background/restart reconstruction, local Monday–Sunday summary |
+| Workout/ProofMode | Planned/completed/skipped status updates Today; template/set validation, history, eight-week counts/streak; challenge expiry/single use/session binding, camera-only UI, private image/thumbnail, `captured` means technical acceptance only; deleting proof removes objects while workout can remain |
+| Optional AI/reports | Read-only answers use deterministic owner data; all proposed writes wait for confirmation; saved conversations remain until user deletion; AI unavailable does not block manual flows; report totals reconcile with source screens and state their date range/timezone |
+
+## Calendar and reminder matrix
+
+Test local dates at month/year boundaries, leap day, 29th–31st anchors, DST gaps/overlaps, timezone changes, and a reminder schedule created after one or more slots passed. Verify bill/debt `2/1/0` offsets at 09:00; task opt-in time; recurrence horizons and next occurrence; status correction, edit, task skip, archive, and payoff. Run two schedulers concurrently and retry the same job; assert unique occurrences/jobs, canceled obsolete pending jobs, and no known duplicate dispatch. Distinguish definite provider failure from ambiguous send (`unknown`). Test denied/revoked notification permission and missing token as visible, recoverable states. Real-device push delivery is checked before launch.
+
+## Security tests (mandatory)
+
+- Enumerate every user-owned table and Storage path with users A and B. A cannot read or attach to B's tasks/series, bills/occurrences, debts/dues/payments, projects, workouts, AI records, or private proof images. Anonymous access returns no personal data. The Today read model must not leak a cross-user item.
+- Deny direct client business-table writes; test forged `user_id`, ownership-changing updates, parent-ID swaps, malformed/expired JWTs, and unauthorized Edge Function command IDs. Verify private function grants and explicit owner checks.
+- Replay task completion, bill paid, optional linked expense creation for both bills/debts, debt payment/adjustment, transaction creation, workout completion, reminder dispatch, and proposal confirmation. Same idempotency key/same payload returns one result; changed payload fails. Test races, unique source links, and permanent financial `origin_command_id` uniqueness after receipt expiry.
+- Challenge expiry/reuse/cross-session binding, MIME spoofing, oversized image, private bucket read/list/download, signed-access expiry, and orphan cleanup. No paid verifier, gesture-match badge, or face recognition path exists in MVP. Test permanent proof/workout/account deletion removes images; ordinary time passage does not purge a still-associated proof.
+- When AI ships, prompt injection attempting cross-user data, secret disclosure, arbitrary SQL, a fabricated balance, unconfirmed task creation, workout rescheduling, bill paid status, or debt-payment recording must fail at the gateway boundary. Validate mock model output as untrusted; deleting a conversation removes its messages without retaining private debug logs.
+- CI scans for secrets and dependency advisories, checks RLS/grants against the full table inventory, and inspects the mobile bundle configuration for server-only keys. Test owner-authorized deletion of task/bill/debt/expense/workout histories, source deletion with expense unlinking, and idempotent account deletion including proof objects, AI data, and pending reminders.
+
+## Device experience and resilience
+
+- iOS and Android: Today opens by default; Today, Tasks, Money, Workout, and AI tabs plus profile-menu Settings are reachable. Agenda actions and quick entry work; loading/empty/offline/timeout/disabled/submitting/error states recover without duplicate writes. AI-unavailable state leaves core flows working. Cached data is labeled stale; sensitive pending data is encrypted and cleared on sign-out.
+- VoiceOver/TalkBack labels and focus order, dynamic text, contrast in both themes, at least 44 × 44 point targets where feasible, keyboard-safe forms, notification/camera permission recovery, and no full-resolution proof download on history lists pass manual review.
+- Focus timer survives routine backgrounding/restart. ProofMode camera flow has no gallery picker; labels say “Proof captured,” without claiming visual gesture verification or impossible-to-cheat proof. A bill marked paid or outside debt payment never claims LifeOps AI processed money. Copy review checks that no wording implies LifeOps AI provides lending, credit approval, banking, or payment processing.
+- Representative data volumes keep agenda, filtered histories, monthly summaries, and reminder batches within agreed performance budgets. Investigate N+1 queries and `EXPLAIN` plans before launch.
+
+## Definition of done
+
+The module's product acceptance criteria pass; migrations, RLS, owner-matched relationships, indexes, validation, typed errors, retries, deletion, and recovery states are included; security and deterministic tests pass in CI; critical iOS/Android flows pass; documentation reflects changes. Release is blocked by any cross-user access path, floating-point currency calculation, public proof image, false gesture-verification claim, unconfirmed AI mutation when AI is enabled, duplicate critical write, or false claim of lending/payment processing.

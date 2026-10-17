@@ -1,0 +1,42 @@
+# Security requirements
+
+## Assets and threats
+
+Protect tasks, bill and existing-debt records, recorded income/expenses, workout history, proof images, auth sessions, push tokens, and AI context from cross-user access, tampering, replay, credential leakage, and unnecessary retention. Assume mobile requests, uploaded files, AI output, and client clocks can be forged. A rooted or modified device can subvert camera UI controls; ProofMode is accountability-oriented and tamper-resistant, not impossible to cheat. LifeOps AI does not handle loan applications, credit scores, lender integrations, or money movement.
+
+## Identity and authorization
+
+- Supabase Auth is the identity source. Verify JWTs at Edge Function entry. Derive owner identity from the verified token, never from request JSON or editable `user_metadata`.
+- Enable RLS on **every user-owned table**, including private-schema tables as defense in depth. Default deny `anon`. Owner read policies require `(select auth.uid()) = user_id` or `profiles.id`; any insert/update policy also needs an owner `WITH CHECK`, and updates need an appropriate SELECT policy. Never grant broad access merely because the role is `authenticated`.
+- Direct client DML is denied for business tables. Grant only required read access; Edge Function commands use a server-only, narrowly scoped database role to execute private transactional functions. The role has no broad table DML grant. Any privileged operation must check owner and parent ownership explicitly, use a fixed `search_path`, revoke default `PUBLIC EXECUTE`, and avoid dynamic SQL. Keep privileged functions out of exposed schemas when possible.
+- Child records use composite owner/parent foreign keys or equivalent database constraints so a user cannot attach their row to another user's task series, bill, tracked debt, project, workout, or category. Test direct queries, agenda reads, and command endpoints with two independent accounts.
+- Server-side workers with elevated access operate on bounded job IDs and recheck record state. Service/secret keys never reach mobile code, source files, logs, crash reports, or test snapshots.
+
+## Storage and ProofMode
+
+- Use a private Supabase Storage bucket. Object keys include owner and session IDs plus an unpredictable filename; path shape alone is not authorization. Storage policies permit only the owner for intended upload/read operations and prevent overwrite/upsert of finalized proof. No public URLs.
+- Issue short-lived signed access only after owner authorization. Validate MIME using file bytes, enforce byte/pixel limits, compress and strip location/EXIF metadata, and generate a small private thumbnail. Delete orphan uploads and objects belonging to permanently deleted proof/workouts/accounts; do not run a time-based proof-image purge while a proof exists.
+- Create challenge IDs and choices server-side. Enforce owner, session, two-minute expiry, and single use transactionally. Check that the submitted object belongs to that session and arrived during the challenge window. Reject replay and cross-session binding. Client capture metadata is informational; do not present a valid upload as proof that a gesture was recognized.
+- The MVP uses no paid verifier, face recognition, biometric identification, or identity matching. The stock app has no gallery path in ProofMode, but an untrusted device cannot provide cryptographic camera provenance. Assess privacy and accuracy before any later on-device gesture recognition.
+
+## Agenda, obligation, and command integrity
+
+- Validate all untrusted input at the Edge Function boundary and enforce database constraints as a second layer: positive amounts, supported currency and scale, bounded text, valid IANA timezone, legal date ranges, ownership, and allowed state transitions.
+- Use integer PHP centavos in storage and calculations. Reject overflow and negative tracked-debt balances after payments or signed manual adjustments. Lock tracked-debt rows before recording/voiding an outside payment or adjustment; enforce idempotency with a unique command receipt and request hash. Do not trust AI-computed amounts or client totals.
+- Task, bill, and debt reminders must bind to an owned source occurrence, and dispatch must recheck its current state. A bill marked paid or outside debt payment is a user record, not proof of a transfer. Neither creates an expense automatically. An optional expense requires explicit confirmation through the normal transaction service, a unique source link, and an owner-matched FK; linking an existing expense also verifies its owner and posted state. Corrections show the linked expense and require an explicit keep/unlink or void choice.
+- Monthly overall/category budgets read posted expense transactions only; validate positive integer limits and calculate spent, signed remaining, and percent used without floating-point currency math. Category budgets cannot be used to access another user's categories.
+- Record tracked-debt payment, balance-adjustment, and expense corrections with actor, timestamp, and reason. Confirm AI proposals through the same command endpoints as manual actions. AI cannot directly add a task, move a workout, mark a bill paid, or record a payment; proposal data is untrusted and expires.
+- Limit rate and payload size for all endpoints, especially auth-adjacent, AI, uploads, and challenge issuance. Return safe error messages without exposing row existence across owners.
+
+## Secrets, privacy, and operations
+
+- Commit only template configuration with fake values. Keep local secrets in ignored files and production secrets in managed secret storage. Run secret scanning in CI and review the mobile bundle for server credentials.
+- Do not log raw JWTs, provider keys, AI prompts/responses, financial notes/details, proof images, or sensitive responses. Use correlation IDs, safe result codes, and redacted diagnostics. Restrict and minimize operational/provider log retention; AI is optional and no provider is selected for MVP documentation.
+- Encrypt in transit; use platform secure storage for mobile session material. Persist sensitive offline cache and pending commands only in encrypted device storage, and clear them on sign-out/account switch. Retain source histories and AI conversations until user deletion. Deleting a proof/workout/account removes associated private objects; deleting an AI conversation removes its messages. Implement owner-authorized deletion across database rows, Storage objects, and queued jobs before public launch. Deleting a bill/debt must not silently delete a separately recorded expense.
+- Review dependency and platform advisories, pin dependency versions when installed, and commit lockfiles. Recheck current Supabase API, RLS, Storage, and Edge Function guidance before implementation.
+
+## Mandatory security verification
+
+Release requires automated cross-user CRUD/RPC/Storage and Today-agenda tests, direct-write denial tests, ownership-changing update tests, linked-expense/idempotency tests, reminder replay/concurrency tests, challenge expiry/reuse tests, AI prompt-injection/proposal tests when AI ships, secret scanning, and a manual review of RLS/grants/privileged functions. See [TEST_PLAN.md](TEST_PLAN.md) for exact scenarios. Any new user-owned table must add an RLS policy and isolation test in the same change.
+
+References: [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [Supabase Storage access control](https://supabase.com/docs/guides/storage/security/access-control), [Supabase Edge Function security](https://supabase.com/docs/guides/functions/auth).

@@ -1,0 +1,27 @@
+# Final MVP product and architecture decisions
+
+These decisions are settled for the MVP. A change must update the product spec, architecture, database design, security rules, tests, and affected migrations together.
+
+| ID | Final decision |
+| --- | --- |
+| D01 | LifeOps AI is a personal productivity/to-do app. **Primary:** Today and Tasks. **Secondary:** Bills, Debts, Expenses, Work, Workout. **Assistive:** optional AI. It never lends, brokers borrowing, scores credit, processes applications, or moves money. |
+| D02 | Initial bottom tabs: **Today, Tasks, Money, Workout, AI**. Money contains Bills, Debts, Expenses, Budgets. Work projects/tasks live inside Tasks. Settings is in the profile/menu. Favor quick entry and low cognitive load. |
+| D03 | Today is a derived owner-scoped view/query of task, bill, debt-due, and planned-workout source records; no separate Today table or shadow bill for a tracked debt. It shows upcoming and completed items from the same sources. |
+| D04 | Expo/React Native/TypeScript/Expo Router on mobile; Supabase PostgreSQL/Auth/Storage/Edge Functions behind it. One account is private to one user. RLS protects every user-owned table; AI/provider/service secrets never enter the mobile bundle. |
+| D05 | Bill paid and outside debt payment are separate from recorded spending. Neither automatically creates an expense. Both may offer **“Also record this as an expense?”**, default off; explicit confirmation calls the normal transaction service and creates or links at most one owner-linked expense. Show likely existing expenses first. Source correction/deletion requires an explicit keep/unlink or void choice for a linked expense. |
+| D06 | MVP currency is **PHP**, stored as integer centavos with a currency code and displayed with ₱ where appropriate. No floating-point currency math, FX conversion, or mixed-currency total. |
+| D07 | Debt tracking is manual: current tracked balance at setup, optional original amount for reference, outside payments, due schedule, notes, and optional signed balance adjustments. No automatic interest, penalties, lender sync, or loan servicing. Remaining balance is deterministic. A payoff estimate needs current balance, fixed planned payment, and frequency and is clearly labeled with assumptions. |
+| D08 | **Simple budgets are in MVP**: optional monthly overall and category spending limits, spent, signed remaining, and percent used. They read posted expense transactions only. No envelope budgeting, forecasting, investments, or complex accounting. |
+| D09 | Tasks share one personal/work model with optional project and independent recurring occurrences. Bills and debt dues use their own occurrences. Bill/debt reminder defaults are 2/1/0 local calendar days at 09:00; task reminders are opt-in. Scheduling is idempotent and uses the profile IANA timezone. |
+| D10 | ProofMode MVP uses a two-minute server-issued single-use challenge, direct in-app camera capture, no gallery picker, session/timestamp binding, and private Storage. Technical acceptance is labeled **“Proof captured”**; there is no paid verifier or automated gesture-match claim. On-device recognition may be evaluated later. Never claim cheating is impossible. |
+| D11 | AI stays provider-neutral and optional. Select a current free or low-cost provider only when the AI milestone begins. AI reads controlled owner-scoped functions; typed proposed writes require explicit confirmation through ordinary domain services. Core app flows work when AI is unavailable. |
+| D12 | User histories—tasks, bills, debts/payments, transactions, workouts, and AI conversations—remain until the user deletes the relevant record/conversation or account. Proof images remain while associated proof exists and are deleted when proof/workout/account is permanently deleted. Do not retain private provider/debug logs. A separately recorded expense survives source bill/debt deletion unless the user explicitly removes it. |
+| D13 | Domain writes use validated Edge Function commands and private transactional database functions. Critical writes use idempotency receipts and permanent source-command uniqueness where needed; owner-scoped reads use RLS. Histories are paginated, sensitive offline state is encrypted, and visible errors can be retried safely. |
+
+## Deferred choices that do not block core MVP development
+
+- Choose the AI provider/model and operating budget at the AI milestone after comparing then-current free or low-cost options. Until selected, the AI tab can show an unavailable state and all manual flows remain usable.
+- Evaluate on-device pose/gesture recognition only after the challenge-and-camera ProofMode works. The MVP makes no visual verification claim.
+- Verify current Expo/Supabase APIs, hosting region, push credentials, and package versions when implementation/deployment begins. No provider, deployment, package, migration, or application code is selected or created by this document.
+
+**Genuinely blocking product decisions for beginning the MVP:** none. The remaining items are implementation or optional-feature choices at their respective milestones.
