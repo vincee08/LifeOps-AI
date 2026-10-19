@@ -22,6 +22,6 @@ These decisions are settled for the MVP. A change must update the product spec, 
 
 - Choose the AI provider/model and operating budget at the AI milestone after comparing then-current free or low-cost options. Until selected, the AI tab can show an unavailable state and all manual flows remain usable.
 - Evaluate on-device pose/gesture recognition only after the challenge-and-camera ProofMode works. The MVP makes no visual verification claim.
-- Verify current Expo/Supabase APIs, hosting region, push credentials, and package versions when implementation/deployment begins. No provider, deployment, package, migration, or application code is selected or created by this document.
+- The foundation shell uses Expo SDK 58 with compatible packages selected by Expo tooling. Recheck current Expo/Supabase APIs and package compatibility for later slices; hosting region, push credentials, and deployment remain future choices. This document does not select an AI provider or authorize business-feature code.
 
 **Genuinely blocking product decisions for beginning the MVP:** none. The remaining items are implementation or optional-feature choices at their respective milestones.

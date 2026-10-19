@@ -1,6 +1,8 @@
 # Test plan and release gates
 
-No tests are implemented yet. Add tests with each vertical slice. Use a local Supabase database, two independent Auth users, fixed clocks/timezones, a fake push service, and (when AI ships) a fake AI provider. No gesture-recognition provider is part of the MVP. Reserve device end-to-end checks for navigation, permissions, camera, backgrounding, and accessibility.
+Foundation tests cover the app shell, navigation, and reusable UI states. Add domain tests with each vertical slice. Use a local Supabase database, two independent Auth users, fixed clocks/timezones, a fake push service, and (when AI ships) a fake AI provider. No gesture-recognition provider is part of the MVP. Reserve device end-to-end checks for navigation, permissions, camera, backgrounding, and accessibility.
+
+The navigation foundation test renders the on-disk Expo Router app so it checks the registered tabs and Settings route. On Windows with Node 22.23.3 and Jest's cache disabled, it took 79.1 seconds; a test that only imported `expo-router/testing-library` took 64.6 seconds, and the state-view test took 10.4 seconds. Instrumentation measured 8.8 seconds inside the navigation test, including 8.3 seconds in `renderRouter`. Most cold-run time is therefore Jest/Expo dependency loading and transformation before the test body, not navigation interaction. Keep the real route context for this integration check; its 30-second test timeout allows cold route rendering without extending the suite-wide timeout. Normal cached runs avoid this cold-transform cost.
 
 ## Product and deterministic tests
 
