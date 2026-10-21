@@ -1,0 +1,14 @@
+# Local stack identifier only; hosted project refs belong outside source.
+project_id = "lifeops-ai-local"
+
+[api]
+# Future client-readable tables need deliberate grants in their migrations.
+auto_expose_new_tables = false
+
+[db]
+# Match this to the hosted projects before the first schema migration.
+major_version = 17
+
+[db.seed]
+# No application tables or seed data exist in this milestone.
+enabled = false
