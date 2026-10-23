@@ -2,7 +2,7 @@
 
 LifeOps AI is a personal productivity and life-management app centered on **“What do I need to do today?”** Today and Tasks lead the product. Money, Workout, and optional AI support them. Bills and existing debts are tracking tools for obligations paid outside the app; LifeOps AI does not lend, move money, or process payments.
 
-**Current state:** an Expo Router mobile foundation with five placeholder tabs, a Settings route, light/dark tokens, accessible UI primitives, tests, and a centralized Supabase client. No authentication flow, application tables, business records, notifications, ProofMode, or AI integration exists yet.
+**Current state:** email/password authentication, protected routes, an editable profile, and the five-tab application shell. The tab content remains placeholder content; no task, money, workout, notification, ProofMode, or AI business data exists yet.
 
 ## Prerequisites
 
@@ -19,7 +19,7 @@ npm ci
 npm run start
 ```
 
-Use the Android development build steps below for a physical phone. `npm run ios` requires macOS; `npm run web` opens a browser preview. The app shell runs without Supabase credentials.
+Use the Android development build steps below for a physical phone. `npm run ios` requires macOS; `npm run web` opens a browser preview. Expo can start without Supabase credentials, but authentication stays on a configuration error screen until they are set.
 
 ## Android development build (Windows)
 
@@ -47,7 +47,7 @@ Copy `.env.example` to an ignored `.env.local` when connecting to Supabase. `EXP
 
 **Every `EXPO_PUBLIC_*` value is visible in the mobile bundle.** Only the publishable key belongs there. Never put a Supabase secret/service-role key, database password, AI key, or other private credential in `.env.local` with an `EXPO_PUBLIC_` prefix, app config, or mobile source. Local `.env*` files are Git-ignored; `.env.example` contains empty placeholders.
 
-The single client is in `src/lib/supabase.ts`. Import `getSupabaseClient()` from there when a backend feature is added. On iOS and Android, the session adapter stores a small AES key in Expo SecureStore and the AES-GCM encrypted session in AsyncStorage, so a large session does not hit SecureStore's value limit. Token refresh follows app foreground/background state. If the secure key is lost during device restore, the unreadable ciphertext is discarded and the user must sign in again. The web preview keeps sessions in memory and does not persist them. No auth UI or backend request is made by the current shell.
+The single client is in `src/lib/supabase.ts`. On iOS and Android, the session adapter stores a small AES key in Expo SecureStore and the AES-GCM encrypted session in AsyncStorage, so a large session does not hit SecureStore's value limit. Token refresh follows app foreground/background state. If the secure key is lost during device restore, the unreadable ciphertext is discarded and the user must sign in again. The web preview keeps sessions in memory and does not persist them. Auth requires a configured Supabase project; the app shows a configuration error when the two public values are missing.
 
 ## Supabase development setup
 
@@ -61,7 +61,28 @@ npx supabase start
 npx supabase status
 ```
 
-Copy the **Project URL** and **Publishable** key from `npx supabase status` into ignored `.env.local`. Never copy the Secret key or database URL into an `EXPO_PUBLIC_` variable. A physical phone cannot reach `127.0.0.1` on the computer: use the computer's LAN IP for the local API URL on a trusted network, or use the separate hosted development project. Restart Metro after changing Expo public environment variables. The local CLI config requires explicit grants for future Data API tables (`auto_expose_new_tables = false`). There are no application migrations or seed data yet.
+Copy the **Project URL** and **Publishable** key from `npx supabase status` into ignored `.env.local`; do not paste terminal status output into logs or issue reports because it also contains secrets. Never copy the Secret key or database URL into an `EXPO_PUBLIC_` variable. A physical phone cannot reach `127.0.0.1` on the computer: use the computer's LAN IP for the local API URL on a trusted network, or use the separate hosted development project. Restart Metro after changing Expo public environment variables. The local CLI config requires explicit grants for Data API tables (`auto_expose_new_tables = false`).
+
+## Authentication development workflow
+
+The app uses Supabase email/password Auth. Sign up sends a verification email; the profile row is created by an `auth.users` trigger even before verification. Sign in requires a verified email, and the form can resend a confirmation email when needed. Forgot password sends a reset email with a link back to the app. The root Expo Router layout waits for session restoration, then exposes either the auth screens or the five-tab shell and Settings. Settings reads and updates only the signed-in user's profile (display name and IANA timezone); currency is fixed to PHP. Sign out clears the Supabase session.
+
+Local Supabase captures confirmation and reset emails in Mailpit. Run `npx supabase status` locally to find the Mailpit URL, open an email there, and follow its link in an installed development build. The local `supabase/config.toml` enables email confirmation and allowlists `lifeopsai://auth/callback`. After changing auth config, restart **only this repository's** local stack with `npx supabase stop` then `npx supabase start`; leave other projects' containers alone.
+
+```powershell
+npx supabase db reset --local --yes
+npx supabase test db --local
+npm run test:local-auth
+npm run test:ci
+```
+
+`db reset --local` replays the profile migration on this disposable local database. The pgTAP test creates independent Auth users and runs real RLS checks as authenticated A, authenticated B, and `anon`. The Auth smoke test creates a random local account, checks unverified sign-in denial, follows Mailpit confirmation and recovery links, checks the callback shape, reads/updates the profile, changes the password, and signs in again. It prints no credentials or session data. Do not run `db reset --linked` against a hosted project.
+
+For the hosted **Development** project, enable email/password and **Confirm Email** in Auth Providers. In Auth > URL Configuration, add the exact Additional Redirect URL `lifeopsai://auth/callback`; keep the normal site URL appropriate to that project. The Development and Production projects each need their own redirect allowlist and public client environment values. This milestone uses the existing single `lifeopsai` scheme, so development and production APKs should not be installed side by side; use distinct schemes and package IDs in a later release if simultaneous installation is required. The default Supabase confirmation and recovery email templates must preserve the requested `redirect_to` value. Do not put a project ref or secret key in the app.
+
+The hosted Development project is not linked in this repository. To apply the reviewed migration there, obtain the real Development project ref from your dashboard, run `npx supabase login`, `npx supabase link --project-ref <development-project-ref>`, verify the linked target, then `npx supabase db push`. Do not link or push to Production during this milestone.
+
+On a physical Android phone, install the development APK, configure the development API URL and publishable key, and restart Metro. Test sign up, open the captured/local or hosted verification email on the phone, and confirm the link opens the app. Test sign in, force-close/reopen to check restoration, sign out, open a protected route while signed out, request a reset email, open it on the phone, set a new password, and sign in again. Check Settings profile changes and invalid timezone feedback. For local Auth, use a LAN-reachable API URL and ensure the phone can reach the computer; Mailpit links can be forwarded to the phone, but the Auth API must also be reachable from it.
 
 ## Future migrations
 
@@ -92,8 +113,8 @@ With Docker running, use `npx supabase db reset` to apply all migrations to a di
 | `src/hooks/`, `src/lib/` | Theme hook, design tokens, environment parsing                          |
 | `__tests__/`             | Foundation navigation and UI-state tests                                |
 | `docs/`                  | Product, architecture, security, database, test, and decision specs     |
-| `supabase/`              | Local CLI config and future migrations; no application schema yet       |
+| `supabase/`              | Local CLI config, profile migration, and pgTAP authorization tests       |
 
 Read [AGENTS.md](AGENTS.md) before changing code. Detailed behavior and acceptance criteria are in [PRODUCT_SPEC.md](docs/PRODUCT_SPEC.md), with technical boundaries in [ARCHITECTURE.md](docs/ARCHITECTURE.md) and [SECURITY.md](docs/SECURITY.md).
 
-The recommended next milestone is Auth/profile, with its own migration, RLS, and cross-user tests. Tasks and derived Today follow as separate feature slices. The current placeholder shell intentionally has no business data.
+The recommended next milestone is Tasks with a derived Today read model. The current tab content intentionally has no business data.

@@ -14,7 +14,7 @@ Expo / React Native / TypeScript / Expo Router
 
 Today is the default route. Initial bottom tabs are **Today, Tasks, Money, Workout, AI**. Money contains Bills, Debts, Expenses, and Budgets; Work projects/tasks live inside Tasks; Settings is in the profile/menu. The agenda is a read model over source records, not a table of copied to-dos. A tracked debt occurrence can appear in Money and Today without creating a duplicate bill.
 
-The device contains a Supabase publishable key and user session only. AI, push, and database secrets stay server-side. Use strict TypeScript plus runtime validation of requests, AI output, and external responses. AI has no selected production provider and is optional. No lender, credit-scoring, application, or payment-processing integration belongs in this architecture.
+The device contains a Supabase publishable key and user session only. AI, push, and database secrets stay server-side. The root Expo Router layout restores the encrypted native Supabase session before rendering protected routes. Supabase Auth handles email/password, verification, and recovery; the app handles only exact `lifeopsai://auth/callback` links and consumes the returned session. A recovery link exposes the reset form until the password update succeeds. Profile preferences are the narrow exception to future Edge Function domain writes: the signed-in user updates display name and timezone directly under column grants and owner RLS. Use strict TypeScript plus runtime validation of requests, AI output, and external responses. AI has no selected production provider and is optional. No lender, credit-scoring, application, or payment-processing integration belongs in this architecture.
 
 ## Mobile responsibilities
 

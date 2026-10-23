@@ -1,10 +1,11 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { AppState, Platform } from 'react-native';
 
 import { readSupabaseConfig } from '@/lib/environment';
+import type { Database } from '@/lib/database.types';
 import { nativeSessionStorage } from '@/lib/supabase-session-storage';
 
-type Client = ReturnType<typeof createClient>;
+type Client = SupabaseClient<Database>;
 
 let client: Client | undefined;
 
@@ -14,7 +15,7 @@ export function getSupabaseClient(): Client {
   const { url, publishableKey } = readSupabaseConfig();
   const isNative = Platform.OS === 'ios' || Platform.OS === 'android';
 
-  client = createClient(url, publishableKey, {
+  client = createClient<Database>(url, publishableKey, {
     auth: {
       storage: isNative ? nativeSessionStorage : undefined,
       autoRefreshToken: isNative,

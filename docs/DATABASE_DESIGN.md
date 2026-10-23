@@ -1,4 +1,4 @@
-# Database design (proposed; no migrations yet)
+# Database design
 
 ## Conventions and boundaries
 
@@ -8,11 +8,13 @@ All currency uses `bigint` integer minor units; JSON encodes centavos as base-10
 
 ## Source tables
 
-The table list is conceptual, not migration SQL. Every listed user-owned table, including `app_private` tables, must have RLS. Internal jobs/tokens have no direct client grants.
+Except for `public.profiles`, the table list is conceptual. Every user-owned table, including future `app_private` tables, must have RLS. Internal jobs/tokens have no direct client grants.
+
+The first migration creates `public.profiles`: `id` references `auth.users(id)` with cascade deletion, nullable trimmed display name (up to 80 characters), a validated IANA timezone, `PHP` currency, and creation/update timestamps. An Auth user insertion creates exactly one profile; a supplied device timezone is accepted only if PostgreSQL recognizes it, otherwise it falls back to `Asia/Manila`. This metadata is a preference and never an authorization input. Existing users are backfilled. The private trigger function has a fixed empty search path and no client execute grant. Authenticated clients receive SELECT on the six profile columns and UPDATE only on display name and timezone. Owner RLS uses `(select auth.uid()) = id` for SELECT and both UPDATE clauses. No client INSERT or DELETE grant exists. The profile primary key already supports owner lookup; no extra index is needed.
 
 | Table | Essential fields and relationships |
 | --- | --- |
-| `profiles` | `id = auth.users.id`, IANA timezone, preferred currency (`PHP` in V1), notification preference |
+| `profiles` | Migrated: `id = auth.users.id`, optional display name, IANA timezone, fixed currency (`PHP` in V1), created/updated timestamps |
 | `projects` | `user_id`, title, description, active/archived state; groups work tasks |
 | `task_series` | `user_id`, title/description/category/context/priority, optional project, anchor local date/time, rule (`daily/weekly/monthly`), active state |
 | `tasks` | `user_id`, optional series/project IDs, ordinal for recurring instance, title/description/category, context (`personal/work`), priority, optional `due_on` and `due_local_time`, optional reminder local time (requires `due_on`), status (`open/completed/skipped`), completed timestamp; unique `(series_id, ordinal)` and owner-matched FKs |

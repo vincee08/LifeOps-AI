@@ -10,8 +10,13 @@ auto_expose_new_tables = false
 major_version = 17
 
 [db.seed]
-# No application tables or seed data exist in this milestone.
 enabled = false
+
+[auth]
+additional_redirect_urls = ["lifeopsai://auth/callback"]
+
+[auth.email]
+enable_confirmations = true
 
 [experimental]
 stack = true
