@@ -2,7 +2,7 @@
 
 LifeOps AI is a personal productivity and life-management app centered on **“What do I need to do today?”** Today and Tasks lead the product. Money, Workout, and optional AI support them. Bills and existing debts are tracking tools for obligations paid outside the app; LifeOps AI does not lend, move money, or process payments.
 
-**Current state:** email/password authentication, protected routes, an editable profile, and the five-tab application shell. The tab content remains placeholder content; no task, money, workout, notification, ProofMode, or AI business data exists yet.
+**Current state:** email/password authentication, protected routes, an editable profile, the five-tab shell, and core Tasks CRUD. Today, Money, Workout, and AI tab content remains placeholder content.
 
 ## Prerequisites
 
@@ -76,7 +76,7 @@ npm run test:local-auth
 npm run test:ci
 ```
 
-`db reset --local` replays the profile migration on this disposable local database. The pgTAP test creates independent Auth users and runs real RLS checks as authenticated A, authenticated B, and `anon`. The Auth smoke test creates a random local account, checks unverified sign-in denial, follows Mailpit confirmation and recovery links, checks the callback shape, reads/updates the profile, changes the password, and signs in again. It prints no credentials or session data. Do not run `db reset --linked` against a hosted project.
+`db reset --local` replays the profile and Tasks migrations on this disposable local database. The pgTAP tests create independent Auth users and run real RLS checks as authenticated A, authenticated B, and `anon`. The Auth smoke test creates a random local account, checks unverified sign-in denial, follows Mailpit confirmation and recovery links, checks the callback shape, reads/updates the profile, changes the password, and signs in again. It prints no credentials or session data. Do not run `db reset --linked` against a hosted project.
 
 For the hosted **Development** project, enable email/password and **Confirm Email** in Auth Providers. In Auth > URL Configuration, add the exact Additional Redirect URL `lifeopsai://auth/callback`; keep the normal site URL appropriate to that project. The Development and Production projects each need their own redirect allowlist and public client environment values. This milestone uses the existing single `lifeopsai` scheme, so development and production APKs should not be installed side by side; use distinct schemes and package IDs in a later release if simultaneous installation is required. The default Supabase confirmation and recovery email templates must preserve the requested `redirect_to` value. Do not put a project ref or secret key in the app.
 
@@ -85,6 +85,8 @@ The hosted Development project is not linked in this repository. To apply the re
 On a physical Android phone, install the development APK, configure the development API URL and publishable key, and restart Metro. Test sign up, open the captured/local or hosted verification email on the phone, and confirm the link opens the app. Test sign in, force-close/reopen to check restoration, sign out, open a protected route while signed out, request a reset email, open it on the phone, set a new password, and sign in again. Check Settings profile changes and invalid timezone feedback. For local Auth, use a LAN-reachable API URL and ensure the phone can reach the computer; Mailpit links can be forwarded to the phone, but the Auth API must also be reachable from it.
 
 ## Future migrations
+
+The core Tasks migration is `supabase/migrations/20261023024613_create_tasks.sql`. It is local only until deliberately pushed to the hosted Development project. After a local reset, run `npx supabase test db --local` to verify owner RLS, grants, constraints, and retry uniqueness. The Tasks tab supports title-only entry, optional details and timezone-aware deadline, filters, completion/reopen, and confirmed deletion. Recurrence, projects, task reminders, and Today aggregation are later milestones. The next milestone is a derived Today view over source tasks.
 
 Create each schema change with `npx supabase migration new <descriptive_name>`. Put SQL in the generated `supabase/migrations/` file; do not handcraft migration names. Each user-owned table must include its ownership constraints, RLS, least-privilege grants and policies, and cross-user tests in the same change. Client-readable tables need an explicit `GRANT SELECT` as well as RLS. Review the SQL before applying it.
 

@@ -18,6 +18,8 @@ The user can quickly see what to do today, what bills are coming, what remains o
 
 ## Tasks and reminders
 
+**Core Tasks milestone:** Users can create, edit, complete/reopen, delete, and filter ordinary tasks with title-only quick entry. The form optionally accepts description, one due date/time interpreted in the profile timezone, category (`personal`, `work`, `other`), and priority (`low`, `medium`, `high`). A task is overdue only if incomplete and its deadline is earlier than the current instant. Completed history remains until user deletion. This slice has no all-day dates, skip state, projects, recurring series, or task reminders; those remain later Tasks work. Today will derive from this table in the next milestone.
+
 Tasks have title, optional description/category, personal or work context, priority, optional due date/time, optional reminder, completion state, and optional project. Examples include groceries, calling a client, cleaning, paying electricity, and working out. Due dates use the user's profile IANA timezone. All-day items have no forced time; task reminders require a due date and are opt-in at the due time when set, or at a chosen local time (default 09:00). Work tasks use the same task model, filtered by context/project.
 
 Recurring tasks can repeat daily, weekly, or monthly. Each occurrence has its own completion state; missed occurrences remain overdue until completed or skipped. Future occurrences follow the original calendar anchor, not the date on which a late occurrence was completed. Monthly dates clamp to the last day of a shorter month. The user can edit or stop a series without rewriting completed history.

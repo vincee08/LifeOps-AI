@@ -18,6 +18,9 @@ jest.mock('@/features/settings/profile-service', () => ({
   })),
   updateProfile: jest.fn(),
 }));
+jest.mock('@/features/tasks/tasks-service', () => ({
+  listTasks: jest.fn(async () => ({ tasks: [], hasMore: false })),
+}));
 
 describe('application shell', () => {
   it('opens Today, navigates across tabs, and reaches Settings from the profile entry', async () => {
@@ -28,7 +31,7 @@ describe('application shell', () => {
       expect(screen.getByLabelText(`${name} tab`)).toBeTruthy();
     }
     await userEvent.press(screen.getByLabelText('Tasks tab'));
-    expect(screen.getByText('A simple place for personal and work responsibilities.')).toBeTruthy();
+    expect(screen.getByText('Keep your next steps in one place.')).toBeTruthy();
 
     await userEvent.press(screen.getByLabelText('Open settings'));
 

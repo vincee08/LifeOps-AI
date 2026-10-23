@@ -5,7 +5,7 @@
 ```text
 Expo / React Native / TypeScript / Expo Router
   Today agenda ← tasks + bill occurrences + debt due occurrences + workout plans
-  Screens → owner-scoped RLS reads; authenticated Edge Function commands
+  Screens → owner-scoped RLS reads; core Tasks owner-RLS CRUD; later Edge Function commands
                     → private transactional PostgreSQL functions
   Reminder worker → Expo Push Service
   ProofMode → private Supabase Storage + challenge validation
@@ -14,7 +14,7 @@ Expo / React Native / TypeScript / Expo Router
 
 Today is the default route. Initial bottom tabs are **Today, Tasks, Money, Workout, AI**. Money contains Bills, Debts, Expenses, and Budgets; Work projects/tasks live inside Tasks; Settings is in the profile/menu. The agenda is a read model over source records, not a table of copied to-dos. A tracked debt occurrence can appear in Money and Today without creating a duplicate bill.
 
-The device contains a Supabase publishable key and user session only. AI, push, and database secrets stay server-side. The root Expo Router layout restores the encrypted native Supabase session before rendering protected routes. Supabase Auth handles email/password, verification, and recovery; the app handles only exact `lifeopsai://auth/callback` links and consumes the returned session. A recovery link exposes the reset form until the password update succeeds. Profile preferences are the narrow exception to future Edge Function domain writes: the signed-in user updates display name and timezone directly under column grants and owner RLS. Use strict TypeScript plus runtime validation of requests, AI output, and external responses. AI has no selected production provider and is optional. No lender, credit-scoring, application, or payment-processing integration belongs in this architecture.
+The device contains a Supabase publishable key and user session only. AI, push, and database secrets stay server-side. The root Expo Router layout restores the encrypted native Supabase session before rendering protected routes. Supabase Auth handles email/password, verification, and recovery; the app handles only exact `lifeopsai://auth/callback` links and consumes the returned session. A recovery link exposes the reset form until the password update succeeds. Profile preferences and core Tasks are scoped direct-client exceptions to later Edge Function domain writes. Both use narrow grants and owner RLS. Use strict TypeScript plus runtime validation of requests, AI output, and external responses. AI has no selected production provider and is optional. No lender, credit-scoring, application, or payment-processing integration belongs in this architecture.
 
 ## Mobile responsibilities
 
@@ -31,7 +31,7 @@ A bounded owner-scoped read function returns source-linked `needs_attention`, `t
 
 ## Commands and transactions
 
-The device may perform owner-scoped reads under RLS. All domain writes use authenticated, versioned Edge Function commands that validate identity, shape, bounds, ownership, state transitions, and expected version where relevant. Edge Functions use a pooled direct PostgreSQL connection with a restricted server-only role granted execution on named private functions, not broad table DML. Private functions check the Edge-verified user ID against every referenced row; privileged functions have a fixed search path and no public execution grant. Keep external network calls outside transactions.
+The device performs owner-scoped reads under RLS. Core Tasks single-row writes use a central typed service, owner RLS, and narrow authenticated column grants. The service validates drafts, reuses one owner-scoped request UUID for create retries, uses `updated_at` to detect stale edits, and conditionally changes completion. The database generates task IDs, stamps first completion, and keeps it stable. Later dependent domains use authenticated, versioned Edge Function commands that validate identity, shape, bounds, ownership, state transitions, and expected version where relevant. Edge Functions use a pooled direct PostgreSQL connection with a restricted server-only role granted execution on named private functions, not broad table DML. Private functions check the Edge-verified user ID against every referenced row; privileged functions have a fixed search path and no public execution grant. Keep external network calls outside transactions.
 
 | Command | Atomic outcome |
 | --- | --- |
@@ -47,7 +47,7 @@ For critical writes, `(user_id, operation, idempotency_key)` identifies a comman
 
 ## Recurrence and reminders
 
-Tasks use a series plus individual task occurrences; bills use bill definitions plus bill occurrences; tracked debts use debt definitions plus due occurrences. Generate tasks 30 days and bill/debt occurrences 90 days ahead, plus the immediate next occurrence when beyond the horizon. A unique `(series or definition, ordinal)` prevents duplicate generation. Recurrence uses the original local calendar anchor: daily/weekly/monthly for tasks, once/weekly/monthly/yearly for bills, once/weekly/monthly for debts. Monthly/yearly dates clamp to the last day of a shorter month; completion does not shift the anchor. Preserve completed historical occurrences when editing future rules.
+Future recurring tasks will use a series plus individual task occurrences; bills use bill definitions plus bill occurrences; tracked debts use debt definitions plus due occurrences. Generate future task occurrences 30 days and bill/debt occurrences 90 days ahead, plus the immediate next occurrence when beyond the horizon. A unique `(series or definition, ordinal)` prevents duplicate generation. Recurrence uses the original local calendar anchor: daily/weekly/monthly for tasks, once/weekly/monthly/yearly for bills, once/weekly/monthly for debts. Monthly/yearly dates clamp to the last day of a shorter month; completion does not shift the anchor. Preserve completed historical occurrences when editing future rules. The current Tasks slice has no recurrence or reminders.
 
 One reminder worker handles task, bill, and debt targets. Bill and debt defaults are 2/1/0 calendar days at 09:00 in the profile's IANA timezone. Task reminders are opt-in at the due time when set or a chosen local time (default 09:00 for all-day tasks). Timezone/due-date/recurrence changes increment a schedule version, cancel obsolete unsent jobs, and insert the correct jobs idempotently. Skip reminder times already past. For nonexistent DST local times use the first valid time afterward; for ambiguous times use the earlier occurrence. A task completed/skipped, bill paid, satisfied debt due, archived source, or fully repaid debt cancels pending jobs for that item.
 
@@ -69,6 +69,6 @@ When the optional AI milestone begins, evaluate currently available free or low-
 
 Return typed safe errors with retryability and correlation IDs. Log operation, result, and latency; avoid prompts, proof images, tokens, notes, and detailed finances. Use owner-scoped indexed queries, server summaries, and cursor pagination. User-requested deletion removes selected tasks/history, bills/occurrences, debts/payments/adjustments, transactions, workouts/proof, or AI conversations. A source bill/debt can be deleted while a separately recorded expense remains with its source link cleared unless the user explicitly deletes that expense. Account deletion is an idempotent authenticated workflow: stop reminders, revoke push tokens, remove private proof objects and all owned content, then delete the Auth user; show progress until complete.
 
-After the navigation/design foundation, build vertical slices in this order: Auth/profile and real Today/task data; task recurrence/reminders; Money bills/reminders; manual debt tracker; recorded expenses and simple budgets; work/projects/focus inside Tasks; planned workouts/ProofMode capture; optional AI and richer reports. Each slice includes accessible states, RLS, cross-user tests, idempotency, and recoverable errors.
+After the navigation/design foundation and Auth/profile, build vertical slices in this order: core Tasks; derived Today; task recurrence/reminders; Money bills/reminders; manual debt tracker; recorded expenses and simple budgets; work/projects/focus inside Tasks; planned workouts/ProofMode capture; optional AI and richer reports. Each slice includes accessible states, RLS, cross-user tests, idempotency, and recoverable errors.
 
 References: [Supabase Edge Function Postgres access](https://supabase.com/docs/guides/functions/connect-to-postgres), [Expo Push Service](https://docs.expo.dev/push-notifications/overview/), [Expo Notifications](https://docs.expo.dev/versions/latest/sdk/notifications/).
