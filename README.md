@@ -2,7 +2,7 @@
 
 LifeOps AI is a personal productivity and life-management app centered on **“What do I need to do today?”** Today and Tasks lead the product. Money, Workout, and optional AI support them. Bills and existing debts are tracking tools for obligations paid outside the app; LifeOps AI does not lend, move money, or process payments.
 
-**Current state:** email/password authentication, protected routes, an editable profile, the five-tab shell, and core Tasks CRUD. Today, Money, Workout, and AI tab content remains placeholder content.
+**Current state:** email/password authentication, protected routes, an editable profile, the five-tab shell, core Tasks CRUD, and a Tasks-derived Today screen. Money, Workout, and AI tab content remains placeholder content.
 
 ## Prerequisites
 
@@ -86,7 +86,7 @@ On a physical Android phone, install the development APK, configure the developm
 
 ## Future migrations
 
-The core Tasks migration is `supabase/migrations/20261023024613_create_tasks.sql`. It is local only until deliberately pushed to the hosted Development project. After a local reset, run `npx supabase test db --local` to verify owner RLS, grants, constraints, and retry uniqueness. The Tasks tab supports title-only entry, optional details and timezone-aware deadline, filters, completion/reopen, and confirmed deletion. Recurrence, projects, task reminders, and Today aggregation are later milestones. The next milestone is a derived Today view over source tasks.
+The core Tasks migration is `supabase/migrations/20261023024613_create_tasks.sql`. It is local only until deliberately pushed to the hosted Development project. After a local reset, run `npx supabase test db --local` to verify owner RLS, grants, constraints, and retry uniqueness. The Tasks tab supports title-only entry, optional details and timezone-aware deadline, filters, completion/reopen, and confirmed deletion. Today reads the existing Tasks table under its owner RLS; this milestone adds no migration or hosted database push. Recurrence, projects, and task reminders remain later milestones.
 
 Create each schema change with `npx supabase migration new <descriptive_name>`. Put SQL in the generated `supabase/migrations/` file; do not handcraft migration names. Each user-owned table must include its ownership constraints, RLS, least-privilege grants and policies, and cross-user tests in the same change. Client-readable tables need an explicit `GRANT SELECT` as well as RLS. Review the SQL before applying it.
 
@@ -119,4 +119,4 @@ With Docker running, use `npx supabase db reset` to apply all migrations to a di
 
 Read [AGENTS.md](AGENTS.md) before changing code. Detailed behavior and acceptance criteria are in [PRODUCT_SPEC.md](docs/PRODUCT_SPEC.md), with technical boundaries in [ARCHITECTURE.md](docs/ARCHITECTURE.md) and [SECURITY.md](docs/SECURITY.md).
 
-The recommended next milestone is Tasks with a derived Today read model. The current tab content intentionally has no business data.
+The recommended next milestone is Bills. Today currently derives tasks only; later Bills, debt dues, and planned workouts will extend it from their own source records.

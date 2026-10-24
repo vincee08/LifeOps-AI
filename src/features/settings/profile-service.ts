@@ -1,18 +1,12 @@
 import { getSupabaseClient } from '@/lib/supabase';
 import type { ProfileRow } from '@/lib/database.types';
+import { isValidTimezone } from '@/features/settings/profile-timezone';
+
+export { isValidTimezone } from '@/features/settings/profile-timezone';
 
 export type Profile = ProfileRow;
 
 const fields = 'id,display_name,timezone,currency_code,created_at,updated_at';
-
-export function isValidTimezone(timezone: string): boolean {
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone: timezone });
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 export async function loadProfile(userId: string): Promise<Profile> {
   const { data, error } = await getSupabaseClient()

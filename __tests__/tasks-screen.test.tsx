@@ -7,12 +7,17 @@ const mockList = jest.fn();
 const mockCreate = jest.fn();
 const mockComplete = jest.fn();
 const mockDelete = jest.fn();
+const mockGet = jest.fn();
+let mockParams: { editTaskId?: string } = {};
 jest.mock('expo-router', () => ({
+  useLocalSearchParams: () => mockParams,
+  useRouter: () => mockRouter,
   useFocusEffect: (effect: () => void) => {
     const React = require('react');
     React.useEffect(effect, [effect]);
   },
 }));
+const mockRouter = { setParams: jest.fn() };
 jest.mock('expo-crypto', () => ({ randomUUID: () => 'stable-task-id' }));
 jest.mock('@/features/auth/AuthProvider', () => ({
   useAuth: () => ({
@@ -26,6 +31,7 @@ jest.mock('@/features/tasks/tasks-service', () => ({
   listTasks: (...args: unknown[]) => mockList(...args),
   createTask: (...args: unknown[]) => mockCreate(...args),
   editTask: jest.fn(),
+  getTask: (...args: unknown[]) => mockGet(...args),
   setTaskCompleted: (...args: unknown[]) => mockComplete(...args),
   deleteTask: (...args: unknown[]) => mockDelete(...args),
 }));
@@ -52,6 +58,7 @@ async function press(name: string) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockParams = {};
   mockList.mockResolvedValue({ tasks: [], hasMore: false });
 });
 
@@ -106,5 +113,23 @@ describe('Tasks screen', () => {
     expect(spy).toHaveBeenCalledWith('Delete task?', expect.any(String), expect.any(Array));
     expect(mockDelete).not.toHaveBeenCalled();
     spy.mockRestore();
+  });
+
+  it('opens the existing editor for a task selected in Today', async () => {
+    mockParams = { editTaskId: 'task-id' };
+    mockGet.mockResolvedValue(task);
+    await render(<TasksScreen />);
+    expect(await screen.findByText('Edit task')).toBeTruthy();
+    expect(screen.getByLabelText('Task title').props.value).toBe('Buy groceries');
+    expect(mockGet).toHaveBeenCalledWith('owner', 'task-id');
+    expect(mockRouter.setParams).toHaveBeenCalledWith({ editTaskId: undefined });
+  });
+
+  it('reuses a selected task already in the first Tasks page', async () => {
+    mockParams = { editTaskId: 'task-id' };
+    mockList.mockResolvedValue({ tasks: [task], hasMore: false });
+    await render(<TasksScreen />);
+    expect(await screen.findByText('Edit task')).toBeTruthy();
+    expect(mockGet).not.toHaveBeenCalled();
   });
 });

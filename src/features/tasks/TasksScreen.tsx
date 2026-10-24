@@ -1,6 +1,6 @@
 import { randomUUID } from 'expo-crypto';
-import { useFocusEffect } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, TextInput, View } from 'react-native';
 
 import { AppButton } from '@/components/ui/AppButton';
@@ -9,6 +9,7 @@ import { Screen } from '@/components/ui/Screen';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/StateView';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { loadProfile } from '@/features/settings/profile-service';
+import { profileTimezone } from '@/features/settings/profile-timezone';
 import {
   formatTaskDueAt,
   isTaskOverdue,
@@ -19,6 +20,7 @@ import {
   createTask,
   deleteTask,
   editTask,
+  getTask,
   listTasks,
   setTaskCompleted,
   type Task,
@@ -41,6 +43,16 @@ const blank: Form = {
   category: 'personal',
   priority: 'medium',
 };
+
+function formFromTask(task: Task, timezone: string): Form {
+  return {
+    title: task.title,
+    description: task.description ?? '',
+    due: taskDueInput(task.due_at, timezone),
+    category: task.category,
+    priority: task.priority,
+  };
+}
 
 function Choice({
   label,
@@ -81,6 +93,12 @@ function Choice({
 
 export function TasksScreen() {
   const theme = useAppTheme();
+  const router = useRouter();
+  const { editTaskId } = useLocalSearchParams<{ editTaskId?: string }>();
+  const editTaskIdRef = useRef(editTaskId);
+  useEffect(() => {
+    editTaskIdRef.current = editTaskId;
+  }, [editTaskId]);
   const { state } = useAuth();
   const userId = state.status === 'signed-in' ? state.session.user.id : null;
   const [timezone, setTimezone] = useState('Asia/Manila');
@@ -128,6 +146,7 @@ export function TasksScreen() {
       setError('');
       setTasks([]);
       setHasMore(false);
+      const requestedTaskId = editTaskIdRef.current;
       void Promise.all([
         listTasks(userId, {
           filter,
@@ -138,11 +157,26 @@ export function TasksScreen() {
         }),
         loadProfile(userId),
       ])
-        .then(([result, profile]) => {
+        .then(async ([result, profile]) => {
+          if (!active) return;
+          const selectedTask = requestedTaskId
+            ? (result.tasks.find((task) => task.id === requestedTaskId) ??
+              (await getTask(userId, requestedTaskId)))
+            : null;
           if (!active) return;
           setTasks(result.tasks);
           setHasMore(result.hasMore);
-          setTimezone(profile.timezone);
+          const zone = profileTimezone(profile.timezone);
+          setTimezone(zone);
+          if (requestedTaskId) {
+            if (selectedTask) {
+              setEditing(selectedTask);
+              setForm(formFromTask(selectedTask, zone));
+              setFormError('');
+              setFormOpen(true);
+            } else setError('Task could not be found. Refresh and try again.');
+            router.setParams({ editTaskId: undefined });
+          }
         })
         .catch((caught: unknown) => {
           if (active)
@@ -160,7 +194,7 @@ export function TasksScreen() {
         requestSeq.current += 1;
         clearInterval(clock);
       };
-    }, [userId, filter, category, priority, refreshAt, refresh]),
+    }, [userId, filter, category, priority, refreshAt, refresh, router]),
   );
 
   async function loadMore() {
@@ -197,13 +231,7 @@ export function TasksScreen() {
   }
   function openEdit(task: Task) {
     setEditing(task);
-    setForm({
-      title: task.title,
-      description: task.description ?? '',
-      due: taskDueInput(task.due_at, timezone),
-      category: task.category,
-      priority: task.priority,
-    });
+    setForm(formFromTask(task, timezone));
     setFormError('');
     setFormOpen(true);
   }

@@ -20,17 +20,18 @@ jest.mock('@/features/settings/profile-service', () => ({
 }));
 jest.mock('@/features/tasks/tasks-service', () => ({
   listTasks: jest.fn(async () => ({ tasks: [], hasMore: false })),
+  listTodayTaskSection: jest.fn(async () => ({ tasks: [], total: 0, hasMore: false })),
 }));
 
 describe('application shell', () => {
   it('opens Today, navigates across tabs, and reaches Settings from the profile entry', async () => {
     await renderRouter('./app');
 
-    expect(screen.getByText('What do I need to do today?')).toBeTruthy();
+    expect(await screen.findByText('Nothing due today.')).toBeTruthy();
     for (const name of ['Today', 'Tasks', 'Money', 'Workout', 'AI']) {
       expect(screen.getByLabelText(`${name} tab`)).toBeTruthy();
     }
-    await userEvent.press(screen.getByLabelText('Tasks tab'));
+    await userEvent.press(screen.getByLabelText('View all tasks'));
     expect(screen.getByText('Keep your next steps in one place.')).toBeTruthy();
 
     await userEvent.press(screen.getByLabelText('Open settings'));

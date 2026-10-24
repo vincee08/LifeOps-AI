@@ -1,5 +1,10 @@
 import { getSupabaseClient } from '@/lib/supabase';
 import type { TaskCategory, TaskPriority, TaskRow } from '@/lib/database.types';
+import {
+  todaySectionForTask,
+  type TodaySection,
+  type TodayWindow,
+} from '@/features/today/today-model';
 
 export type Task = TaskRow;
 export type TaskFilter = 'active' | 'overdue' | 'completed';
@@ -21,6 +26,44 @@ export type TaskListOptions = {
 const fields =
   'id,user_id,client_request_id,title,description,category,priority,due_at,completed_at,created_at,updated_at';
 export const TASK_PAGE_SIZE = 30;
+export const TODAY_SECTION_LIMIT = 20;
+
+export type TodayTaskPage = { tasks: Task[]; total: number; hasMore: boolean };
+
+export async function listTodayTaskSection(
+  userId: string,
+  section: TodaySection,
+  window: TodayWindow,
+): Promise<TodayTaskPage> {
+  let query = getSupabaseClient()
+    .from('tasks')
+    .select(fields, { count: 'exact' })
+    .eq('user_id', userId);
+  if (section === 'completed') {
+    query = query
+      .gte('completed_at', window.start)
+      .lt('completed_at', window.end)
+      .order('completed_at', { ascending: false })
+      .order('id', { ascending: false });
+  } else {
+    query = query.is('completed_at', null);
+    query =
+      section === 'overdue'
+        ? query.lt('due_at', window.now)
+        : query.gte('due_at', window.now).lt('due_at', window.end);
+    query = query
+      .order('due_at', { ascending: true })
+      .order('priority', { ascending: true })
+      .order('id', { ascending: true });
+  }
+  const { data, count, error } = await query.range(0, TODAY_SECTION_LIMIT - 1);
+  if (error || typeof count !== 'number')
+    throw new Error('Today tasks could not be loaded. Please try again.');
+  const tasks = (data ?? []) as Task[];
+  if (tasks.some((task) => todaySectionForTask(task, window) !== section))
+    throw new Error('Today tasks could not be classified. Please try again.');
+  return { tasks, total: count, hasMore: count > tasks.length };
+}
 
 function validateDraft(input: TaskDraft) {
   const title = input.title.trim();
