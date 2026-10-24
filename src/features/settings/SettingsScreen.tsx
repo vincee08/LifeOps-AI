@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, TextInput, View } from 'react-native';
+import { AppState, KeyboardAvoidingView, Linking, Platform, TextInput, View } from 'react-native';
 
 import { AppButton } from '@/components/ui/AppButton';
 import { AppText } from '@/components/ui/AppText';
@@ -7,6 +7,14 @@ import { Screen } from '@/components/ui/Screen';
 import { ErrorState, LoadingState } from '@/components/ui/StateView';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { loadProfile, updateProfile, type Profile } from '@/features/settings/profile-service';
+import {
+  getNotificationPermissionStatus,
+  reconcileUpcomingTaskReminders,
+  reminderWarning,
+  requestNotificationPermission,
+  setTaskRemindersEnabled,
+  taskRemindersEnabled,
+} from '@/features/tasks/task-notifications';
 import { useAppTheme } from '@/hooks/useAppTheme';
 
 export function SettingsScreen() {
@@ -22,6 +30,12 @@ export function SettingsScreen() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [remindersOn, setRemindersOn] = useState(true);
+  const [permission, setPermission] = useState<
+    'granted' | 'denied' | 'undetermined' | 'unavailable'
+  >('undetermined');
+  const [reminderBusy, setReminderBusy] = useState(false);
+  const [reminderMessage, setReminderMessage] = useState('');
 
   useEffect(() => {
     if (!userId) return;
@@ -44,6 +58,67 @@ export function SettingsScreen() {
       active = false;
     };
   }, [userId, reloadKey]);
+
+  useEffect(() => {
+    if (!userId) return;
+    let active = true;
+    const load = async () => {
+      try {
+        const [enabled, status] = await Promise.all([
+          taskRemindersEnabled(userId),
+          getNotificationPermissionStatus(),
+        ]);
+        if (active) {
+          setRemindersOn(enabled);
+          setPermission(status);
+        }
+      } catch {
+        if (active) setReminderMessage('Task reminder settings could not be loaded. Try again.');
+      }
+    };
+    void load();
+    const listener = AppState.addEventListener('change', (next) => {
+      if (next === 'active') void load();
+    });
+    return () => {
+      active = false;
+      listener.remove();
+    };
+  }, [userId]);
+
+  async function changeReminders(enabled: boolean) {
+    if (!userId || reminderBusy) return;
+    setReminderBusy(true);
+    setReminderMessage('');
+    try {
+      const result = await setTaskRemindersEnabled(userId, enabled);
+      setRemindersOn(enabled);
+      if (result.status === 'error') {
+        setReminderMessage('Task reminder settings could not be confirmed. Try again.');
+        return;
+      }
+      if (enabled) await allowNotifications();
+      else setReminderMessage('Task reminders are off. Pending reminders were canceled.');
+    } catch {
+      setReminderMessage('Task reminder settings could not be saved. Try again.');
+    } finally {
+      setReminderBusy(false);
+    }
+  }
+
+  async function allowNotifications() {
+    if (!userId) return;
+    const status = await requestNotificationPermission();
+    setPermission(status);
+    if (status !== 'granted') {
+      setReminderMessage(
+        'Notifications are disabled on this device. Enable them in device settings to receive task reminders.',
+      );
+      return;
+    }
+    const result = await reconcileUpcomingTaskReminders(userId);
+    setReminderMessage(reminderWarning(result) || 'Task reminders are enabled.');
+  }
 
   async function save() {
     if (!userId || saving) return;
@@ -69,8 +144,12 @@ export function SettingsScreen() {
     setError('');
     try {
       await signOut();
-    } catch {
-      setError('Could not sign out. Check your connection and try again.');
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'Could not sign out. Check your connection and try again.',
+      );
     } finally {
       setSigningOut(false);
     }
@@ -137,6 +216,45 @@ export function SettingsScreen() {
               <AppText tone="mutedText">Use an IANA timezone, such as Asia/Manila.</AppText>
             </View>
             <AppText>Currency: {profile.currency_code}</AppText>
+            <View style={{ gap: theme.spacing.sm }}>
+              <AppText variant="title">Task reminders</AppText>
+              <AppText>Task reminders: {remindersOn ? 'On' : 'Off'}</AppText>
+              <AppText tone="mutedText">
+                When on, reminders are set for 1 hour, 30 minutes, and 5 minutes before a task
+                deadline.
+              </AppText>
+              <AppText tone="mutedText">
+                {permission === 'granted'
+                  ? 'Device notifications allowed.'
+                  : permission === 'unavailable'
+                    ? 'Device notifications are unavailable.'
+                    : 'Device notifications are disabled. Tasks still save normally.'}
+              </AppText>
+              <AppButton
+                label={remindersOn ? 'Turn task reminders off' : 'Turn task reminders on'}
+                variant="secondary"
+                submitting={reminderBusy}
+                onPress={() => void changeReminders(!remindersOn)}
+              />
+              {remindersOn && permission === 'undetermined' ? (
+                <AppButton
+                  label="Allow task notifications"
+                  variant="secondary"
+                  disabled={reminderBusy}
+                  onPress={() => void allowNotifications()}
+                />
+              ) : null}
+              {remindersOn && permission === 'denied' && Platform.OS !== 'web' ? (
+                <AppButton
+                  label="Open device notification settings"
+                  variant="secondary"
+                  onPress={() => void Linking.openSettings()}
+                />
+              ) : null}
+              {reminderMessage ? (
+                <AppText accessibilityRole="alert">{reminderMessage}</AppText>
+              ) : null}
+            </View>
             {error ? (
               <AppText tone="danger" accessibilityRole="alert">
                 {error}

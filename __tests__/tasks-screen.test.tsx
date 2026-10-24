@@ -29,11 +29,21 @@ jest.mock('@/features/settings/profile-service', () => ({
 }));
 jest.mock('@/features/tasks/tasks-service', () => ({
   listTasks: (...args: unknown[]) => mockList(...args),
-  createTask: (...args: unknown[]) => mockCreate(...args),
-  editTask: jest.fn(),
   getTask: (...args: unknown[]) => mockGet(...args),
-  setTaskCompleted: (...args: unknown[]) => mockComplete(...args),
-  deleteTask: (...args: unknown[]) => mockDelete(...args),
+}));
+jest.mock('@/features/tasks/task-reminder-commands', () => ({
+  createTaskWithReminders: (...args: unknown[]) => mockCreate(...args),
+  editTaskWithReminders: jest.fn(),
+  setTaskCompletedWithReminders: (...args: unknown[]) => mockComplete(...args),
+  deleteTaskWithReminders: (...args: unknown[]) => mockDelete(...args),
+}));
+jest.mock('@/features/tasks/task-notifications', () => ({
+  reminderWarning: (result: { status: string }) =>
+    result.status === 'permission-denied'
+      ? 'Notifications are disabled on this device. Enable them in Settings.'
+      : result.status === 'error'
+        ? 'Task reminder scheduling could not be confirmed. Open Settings to retry.'
+        : '',
 }));
 
 const task = {
@@ -64,7 +74,9 @@ beforeEach(() => {
 
 describe('Tasks screen', () => {
   it('shows an empty state and creates with only a title using the same UUID on retry', async () => {
-    mockCreate.mockRejectedValueOnce(new Error('Network failure')).mockResolvedValueOnce(task);
+    mockCreate
+      .mockRejectedValueOnce(new Error('Network failure'))
+      .mockResolvedValueOnce({ task, reminder: { status: 'none', count: 0 } });
     await render(<TasksScreen />);
     expect(await screen.findByText('No tasks here')).toBeTruthy();
     await press('Add task');
@@ -124,6 +136,28 @@ describe('Tasks screen', () => {
     expect(mockGet).toHaveBeenCalledWith('owner', 'task-id');
     expect(mockRouter.setParams).toHaveBeenCalledWith({ editTaskId: undefined });
   });
+
+  it.each(['permission-denied', 'error'])(
+    'keeps a saved task and shows %s reminder warning',
+    async (status) => {
+      mockCreate.mockResolvedValueOnce({
+        task: { ...task, due_at: '2026-10-30T09:00:00Z' },
+        reminder: { status, count: 0 },
+      });
+      await render(<TasksScreen />);
+      await screen.findByText('No tasks here');
+      await press('Add task');
+      await act(async () => {
+        fireEvent.changeText(screen.getByLabelText('Task title'), 'Buy groceries');
+      });
+      await act(async () => {
+        fireEvent.changeText(screen.getByLabelText('Due date and time'), '2026-10-30 17:00');
+      });
+      await press('Create task');
+      expect(await screen.findByText(/Task saved\./)).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Task reminder settings' })).toBeTruthy();
+    },
+  );
 
   it('reuses a selected task already in the first Tasks page', async () => {
     mockParams = { editTaskId: 'task-id' };

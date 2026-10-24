@@ -2,7 +2,7 @@
 
 LifeOps AI is a personal productivity and life-management app centered on **“What do I need to do today?”** Today and Tasks lead the product. Money, Workout, and optional AI support them. Bills and existing debts are tracking tools for obligations paid outside the app; LifeOps AI does not lend, move money, or process payments.
 
-**Current state:** email/password authentication, protected routes, an editable profile, the five-tab shell, core Tasks CRUD, and a Tasks-derived Today screen. Money, Workout, and AI tab content remains placeholder content.
+**Current state:** email/password authentication, protected routes, an editable profile, the five-tab shell, core Tasks CRUD, local task deadline reminders, and a Tasks-derived Today screen. Money, Workout, and AI tab content remains placeholder content.
 
 ## Prerequisites
 
@@ -84,9 +84,17 @@ The hosted Development project is not linked in this repository. To apply the re
 
 On a physical Android phone, install the development APK, configure the development API URL and publishable key, and restart Metro. Test sign up, open the captured/local or hosted verification email on the phone, and confirm the link opens the app. Test sign in, force-close/reopen to check restoration, sign out, open a protected route while signed out, request a reset email, open it on the phone, set a new password, and sign in again. Check Settings profile changes and invalid timezone feedback. For local Auth, use a LAN-reachable API URL and ensure the phone can reach the computer; Mailpit links can be forwarded to the phone, but the Auth API must also be reachable from it.
 
+## Local task reminders
+
+Task reminders default to On per signed-in account on this device. For a task with a deadline, Expo schedules local notifications 1 hour, 30 minutes, and 5 minutes before the stored due instant. Only future offsets are scheduled. Undated, completed, and overdue tasks have no pending reminders. Editing a title or deadline reconciles notification content and timing; completing, deleting, or signing out cancels pending requests; reopening schedules only future offsets. If cancellation fails, sign-out asks the user to retry. The app also reconciles a bounded set of upcoming and already scheduled tasks at authenticated startup/resume. Today continues to read Tasks directly.
+
+Settings provides Task reminders On/Off, an explicit notification permission action, and device-settings guidance after denial. Tasks still save when device permission or scheduling fails; a warning is shown. Notification text includes the task title and relative due timing, never its description. Android uses the dedicated **Task Reminders** channel (`task-reminders-v2`) with default importance and the device's normal notification sound; users can change that channel's sound in Android settings. No custom sound file is bundled. Android can delay local delivery; reminders are not guaranteed to arrive at the exact second. No exact-alarm permission, remote push service, or cloud job is used.
+
+`expo-notifications` is a native dependency with a config plugin, so **install a new EAS development build** before testing these reminders if the APK predates that native module; an earlier APK cannot gain the native module through Metro alone. The Task Reminders system-sound fix changes only JavaScript and uses a new runtime channel ID, so an APK that already schedules reminders can pick it up by reloading the development build from Metro. Test permission Allow/Deny, the channel and its user-adjustable sound, foreground/background delivery, edit/completion/deletion, app restart, and notification taps on a physical Android phone. This change has no database migration and requires no hosted Supabase push.
+
 ## Future migrations
 
-The core Tasks migration is `supabase/migrations/20261023024613_create_tasks.sql`. It is local only until deliberately pushed to the hosted Development project. After a local reset, run `npx supabase test db --local` to verify owner RLS, grants, constraints, and retry uniqueness. The Tasks tab supports title-only entry, optional details and timezone-aware deadline, filters, completion/reopen, and confirmed deletion. Today reads the existing Tasks table under its owner RLS; this milestone adds no migration or hosted database push. Recurrence, projects, and task reminders remain later milestones.
+The core Tasks migration is `supabase/migrations/20261023024613_create_tasks.sql`. It is local only until deliberately pushed to the hosted Development project. After a local reset, run `npx supabase test db --local` to verify owner RLS, grants, constraints, and retry uniqueness. The Tasks tab supports title-only entry, optional details and timezone-aware deadline, filters, completion/reopen, and confirmed deletion. Today reads the existing Tasks table under its owner RLS. Recurrence and projects remain later milestones; Bills is next after Task Reminders.
 
 Create each schema change with `npx supabase migration new <descriptive_name>`. Put SQL in the generated `supabase/migrations/` file; do not handcraft migration names. Each user-owned table must include its ownership constraints, RLS, least-privilege grants and policies, and cross-user tests in the same change. Client-readable tables need an explicit `GRANT SELECT` as well as RLS. Review the SQL before applying it.
 

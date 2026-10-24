@@ -10,6 +10,8 @@ All currency uses `bigint` integer minor units; JSON encodes centavos as base-10
 
 Except for `public.profiles` and `public.tasks`, the table list is conceptual. Every user-owned table, including future `app_private` tables, must have RLS. Internal jobs/tokens have no direct client grants.
 
+Task reminders in the current milestone are scheduled locally by the operating system. Pending Expo notification requests contain their own identifiers and minimal owner/task/offset/due metadata for cancellation and reconciliation. The global On/Off preference is scoped by account in device storage. No task reminder table, task schema change, migration, or hosted Supabase push is required. Future bill/debt reminder storage remains conceptual below.
+
 The first migration creates `public.profiles`: `id` references `auth.users(id)` with cascade deletion, nullable trimmed display name (up to 80 characters), a validated IANA timezone, `PHP` currency, and creation/update timestamps. An Auth user insertion creates exactly one profile; a supplied device timezone is accepted only if PostgreSQL recognizes it, otherwise it falls back to `Asia/Manila`. This metadata is a preference and never an authorization input. Existing users are backfilled. The private trigger function has a fixed empty search path and no client execute grant. Authenticated clients receive SELECT on the six profile columns and UPDATE only on display name and timezone. Owner RLS uses `(select auth.uid()) = id` for SELECT and both UPDATE clauses. No client INSERT or DELETE grant exists. The profile primary key already supports owner lookup; no extra index is needed.
 
 | Table | Essential fields and relationships |

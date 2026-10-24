@@ -10,11 +10,15 @@ const mockAuth = {
   setSession: jest.fn(),
   signOut: jest.fn(),
 };
+const mockCancelReminders = jest.fn();
 jest.mock('expo-linking', () => ({
   getInitialURL: jest.fn(),
   addEventListener: jest.fn(),
 }));
 jest.mock('@/lib/supabase', () => ({ getSupabaseClient: () => ({ auth: mockAuth }) }));
+jest.mock('@/features/tasks/task-notifications', () => ({
+  cancelAllTaskReminders: (...args: unknown[]) => mockCancelReminders(...args),
+}));
 
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
 
@@ -38,6 +42,7 @@ beforeEach(() => {
     data: { subscription: { unsubscribe: jest.fn() } },
   });
   mockAuth.signOut.mockResolvedValue({ error: null });
+  mockCancelReminders.mockResolvedValue({ status: 'none', count: 0 });
 });
 
 describe('auth bootstrap', () => {
@@ -60,6 +65,7 @@ describe('auth bootstrap', () => {
     fireEvent.press(screen.getByText('Sign out'));
     await waitFor(() => expect(screen.getByText('signed-out')).toBeTruthy());
     expect(mockAuth.signOut).toHaveBeenCalledTimes(1);
+    expect(mockCancelReminders).toHaveBeenCalledWith('owner');
   });
 
   it('restores a recovery link into reset-only state', async () => {

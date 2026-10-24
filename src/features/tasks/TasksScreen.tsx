@@ -1,6 +1,6 @@
 import { randomUUID } from 'expo-crypto';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, TextInput, View } from 'react-native';
 
 import { AppButton } from '@/components/ui/AppButton';
@@ -10,22 +10,20 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/ui/StateView'
 import { useAuth } from '@/features/auth/AuthProvider';
 import { loadProfile } from '@/features/settings/profile-service';
 import { profileTimezone } from '@/features/settings/profile-timezone';
+import { reminderWarning, type ReminderResult } from '@/features/tasks/task-notifications';
+import {
+  createTaskWithReminders,
+  deleteTaskWithReminders,
+  editTaskWithReminders,
+  setTaskCompletedWithReminders,
+} from '@/features/tasks/task-reminder-commands';
 import {
   formatTaskDueAt,
   isTaskOverdue,
   parseTaskDueAt,
   taskDueInput,
 } from '@/features/tasks/task-time';
-import {
-  createTask,
-  deleteTask,
-  editTask,
-  getTask,
-  listTasks,
-  setTaskCompleted,
-  type Task,
-  type TaskFilter,
-} from '@/features/tasks/tasks-service';
+import { getTask, listTasks, type Task, type TaskFilter } from '@/features/tasks/tasks-service';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import type { TaskCategory, TaskPriority } from '@/lib/database.types';
 
@@ -43,6 +41,15 @@ const blank: Form = {
   category: 'personal',
   priority: 'medium',
 };
+
+function savedReminderNotice(reminder: ReminderResult, hasDueDate: boolean) {
+  if (!hasDueDate) return '';
+  if (reminder.status === 'scheduled') return 'Reminders scheduled.';
+  if (reminder.status === 'none')
+    return 'Task saved. No reminder times remain before this deadline.';
+  if (reminder.status === 'off') return 'Task saved. Task reminders are off in Settings.';
+  return `Task saved. ${reminderWarning(reminder)}`;
+}
 
 function formFromTask(task: Task, timezone: string): Form {
   return {
@@ -95,10 +102,6 @@ export function TasksScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const { editTaskId } = useLocalSearchParams<{ editTaskId?: string }>();
-  const editTaskIdRef = useRef(editTaskId);
-  useEffect(() => {
-    editTaskIdRef.current = editTaskId;
-  }, [editTaskId]);
   const { state } = useAuth();
   const userId = state.status === 'signed-in' ? state.session.user.id : null;
   const [timezone, setTimezone] = useState('Asia/Manila');
@@ -110,6 +113,7 @@ export function TasksScreen() {
   const [loading, setLoading] = useState(true);
   const [moreLoading, setMoreLoading] = useState(false);
   const [error, setError] = useState('');
+  const [reminderNotice, setReminderNotice] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Task | null>(null);
   const [form, setForm] = useState<Form>(blank);
@@ -146,7 +150,7 @@ export function TasksScreen() {
       setError('');
       setTasks([]);
       setHasMore(false);
-      const requestedTaskId = editTaskIdRef.current;
+      const requestedTaskId = editTaskId;
       void Promise.all([
         listTasks(userId, {
           filter,
@@ -194,7 +198,7 @@ export function TasksScreen() {
         requestSeq.current += 1;
         clearInterval(clock);
       };
-    }, [userId, filter, category, priority, refreshAt, refresh, router]),
+    }, [userId, filter, category, priority, refreshAt, refresh, router, editTaskId]),
   );
 
   async function loadMore() {
@@ -227,12 +231,14 @@ export function TasksScreen() {
     setEditing(null);
     setForm(blank);
     setFormError('');
+    setReminderNotice('');
     setFormOpen(true);
   }
   function openEdit(task: Task) {
     setEditing(task);
     setForm(formFromTask(task, timezone));
     setFormError('');
+    setReminderNotice('');
     setFormOpen(true);
   }
   async function save() {
@@ -255,13 +261,14 @@ export function TasksScreen() {
         category: form.category,
         priority: form.priority,
       };
-      if (editing) await editTask(userId, editing, draft);
-      else
-        await createTask(
-          userId,
-          createRequestRef.current ?? (createRequestRef.current = randomUUID()),
-          draft,
-        );
+      const result = editing
+        ? await editTaskWithReminders(userId, editing, draft)
+        : await createTaskWithReminders(
+            userId,
+            createRequestRef.current ?? (createRequestRef.current = randomUUID()),
+            draft,
+          );
+      setReminderNotice(savedReminderNotice(result.reminder, result.task.due_at !== null));
       createRequestRef.current = null;
       setFormOpen(false);
       setEditing(null);
@@ -279,7 +286,12 @@ export function TasksScreen() {
     setBusyId(task.id);
     setError('');
     try {
-      await setTaskCompleted(userId, task.id, task.completed_at === null);
+      const result = await setTaskCompletedWithReminders(
+        userId,
+        task.id,
+        task.completed_at === null,
+      );
+      setReminderNotice(reminderWarning(result.reminder));
       setTasks((current) => current.filter((item) => item.id !== task.id));
       refresh();
     } catch (caught) {
@@ -296,7 +308,8 @@ export function TasksScreen() {
       setBusyId(task.id);
       setError('');
       try {
-        await deleteTask(userId, task.id);
+        const reminder = await deleteTaskWithReminders(userId, task.id);
+        setReminderNotice(reminderWarning(reminder));
         setTasks((current) => current.filter((item) => item.id !== task.id));
         refresh();
       } catch (caught) {
@@ -334,6 +347,19 @@ export function TasksScreen() {
           <AppText variant="display">Tasks</AppText>
           <AppText tone="mutedText">Keep your next steps in one place.</AppText>
         </View>
+        {reminderNotice ? (
+          <View style={{ gap: theme.spacing.sm }}>
+            <AppText accessibilityRole="alert">{reminderNotice}</AppText>
+            {reminderNotice.includes('Settings') ||
+            reminderNotice.includes('disabled on this device') ? (
+              <AppButton
+                label="Task reminder settings"
+                variant="secondary"
+                onPress={() => router.navigate('/settings')}
+              />
+            ) : null}
+          </View>
+        ) : null}
         {formOpen ? (
           <View style={{ gap: theme.spacing.md }}>
             <AppText variant="title">{editing ? 'Edit task' : 'Add a task'}</AppText>

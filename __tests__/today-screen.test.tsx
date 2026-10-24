@@ -31,7 +31,12 @@ jest.mock('@/features/settings/profile-service', () => ({
 }));
 jest.mock('@/features/tasks/tasks-service', () => ({
   listTodayTaskSection: (...args: unknown[]) => mockList(...args),
-  setTaskCompleted: (...args: unknown[]) => mockComplete(...args),
+}));
+jest.mock('@/features/tasks/task-reminder-commands', () => ({
+  setTaskCompletedWithReminders: (...args: unknown[]) => mockComplete(...args),
+}));
+jest.mock('@/features/tasks/task-notifications', () => ({
+  reminderWarning: () => '',
 }));
 
 const due: Task = {
@@ -66,7 +71,7 @@ beforeEach(() => {
   mockList.mockImplementation((_owner: string, section: string) =>
     Promise.resolve(page(section === 'today' ? [due] : [])),
   );
-  mockComplete.mockResolvedValue(completed);
+  mockComplete.mockResolvedValue({ task: completed, reminder: { status: 'none', count: 0 } });
 });
 afterEach(() => jest.restoreAllMocks());
 
@@ -110,7 +115,7 @@ it('completes and reopens through the Tasks service and opens the Tasks editor',
   );
   mockComplete.mockImplementation(async (_owner: string, _id: string, value: boolean) => {
     isCompleted = value;
-    return value ? completed : due;
+    return { task: value ? completed : due, reminder: { status: 'none', count: 0 } };
   });
   await render(<TodayScreen />);
   expect(await screen.findByText('Prepare notes')).toBeTruthy();

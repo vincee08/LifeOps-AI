@@ -8,10 +8,11 @@ import { Screen } from '@/components/ui/Screen';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/StateView';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { loadProfile } from '@/features/settings/profile-service';
+import { reminderWarning } from '@/features/tasks/task-notifications';
+import { setTaskCompletedWithReminders } from '@/features/tasks/task-reminder-commands';
 import { formatTaskDueAt } from '@/features/tasks/task-time';
 import {
   listTodayTaskSection,
-  setTaskCompleted,
   type Task,
   type TodayTaskPage,
 } from '@/features/tasks/tasks-service';
@@ -102,6 +103,7 @@ export function TodayScreen() {
   const [errors, setErrors] = useState<SectionErrors>(emptyErrors);
   const [profileError, setProfileError] = useState('');
   const [actionError, setActionError] = useState('');
+  const [reminderNotice, setReminderNotice] = useState('');
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [refreshAt, setRefreshAt] = useState<string | null>(null);
@@ -184,7 +186,12 @@ export function TodayScreen() {
     setBusyId(task.id);
     setActionError('');
     try {
-      await setTaskCompleted(userId, task.id, task.completed_at === null);
+      const result = await setTaskCompletedWithReminders(
+        userId,
+        task.id,
+        task.completed_at === null,
+      );
+      setReminderNotice(reminderWarning(result.reminder));
       refresh();
     } catch (caught) {
       setActionError(caught instanceof Error ? caught.message : 'Task status could not be saved.');
@@ -223,6 +230,7 @@ export function TodayScreen() {
       ) : null}
       {profileError ? <ErrorState description={profileError} onRetry={refresh} /> : null}
       {actionError ? <ErrorState description={actionError} onRetry={refresh} /> : null}
+      {reminderNotice ? <AppText accessibilityRole="alert">{reminderNotice}</AppText> : null}
       {loading ? <LoadingState label="Loading today’s tasks…" /> : null}
       {!loading && !profileError && window ? (
         <>

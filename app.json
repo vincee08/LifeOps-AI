@@ -37,6 +37,12 @@
       ],
       "expo-font",
       "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "enableRemoteNotifications": false
+        }
+      ],
       "expo-status-bar"
     ],
     "experiments": {

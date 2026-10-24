@@ -4,6 +4,7 @@ import { View } from 'react-native';
 
 import { ErrorState, LoadingState } from '@/components/ui/StateView';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
+import { TaskNotificationLifecycle } from '@/features/tasks/TaskNotificationLifecycle';
 import { useAppTheme } from '@/hooks/useAppTheme';
 
 export function ErrorBoundary({ retry }: ErrorBoundaryProps) {
@@ -59,6 +60,9 @@ function RootNavigator() {
   return (
     <>
       <StatusBar style={theme.mode === 'dark' ? 'light' : 'dark'} />
+      {canUseApp && state.status === 'signed-in' ? (
+        <TaskNotificationLifecycle ownerId={state.session.user.id} />
+      ) : null}
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: theme.colors.surface },

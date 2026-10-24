@@ -10,6 +10,7 @@ import {
 } from 'react';
 
 import { parseAuthCallback, restoreSession } from '@/features/auth/auth-service';
+import { cancelAllTaskReminders } from '@/features/tasks/task-notifications';
 import { getSupabaseClient } from '@/lib/supabase';
 
 type AuthState =
@@ -138,6 +139,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
           current.status === 'signed-in' ? { ...current, recovery: false } : current,
         ),
       signOut: async () => {
+        if (state.status === 'signed-in') {
+          const cancellation = await cancelAllTaskReminders(state.session.user.id);
+          if (cancellation.status === 'error')
+            throw new Error('Task reminders could not be canceled. Try signing out again.');
+        }
         const { error } = await getSupabaseClient().auth.signOut();
         if (error) throw error;
         setState({ status: 'signed-out' });

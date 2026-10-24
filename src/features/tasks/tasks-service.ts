@@ -27,6 +27,9 @@ const fields =
   'id,user_id,client_request_id,title,description,category,priority,due_at,completed_at,created_at,updated_at';
 export const TASK_PAGE_SIZE = 30;
 export const TODAY_SECTION_LIMIT = 20;
+export const REMINDER_RECONCILE_LIMIT = 100;
+export type ReminderTask = Pick<Task, 'id' | 'user_id' | 'title' | 'due_at' | 'completed_at'>;
+const reminderFields = 'id,user_id,title,due_at,completed_at';
 
 export type TodayTaskPage = { tasks: Task[]; total: number; hasMore: boolean };
 
@@ -124,6 +127,39 @@ export async function getTask(userId: string, id: string): Promise<Task | null> 
     .maybeSingle();
   if (error) throw new Error('Task could not be loaded. Please try again.');
   return data as Task | null;
+}
+
+// Keep startup reconciliation bounded. Existing OS requests are checked separately
+// by ID so edits and deletions made on another device can be detected.
+export async function listUpcomingReminderTasks(
+  userId: string,
+  now: string,
+): Promise<ReminderTask[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('tasks')
+    .select(reminderFields)
+    .eq('user_id', userId)
+    .is('completed_at', null)
+    .gt('due_at', now)
+    .lte('due_at', new Date(Date.parse(now) + 30 * 24 * 60 * 60 * 1000).toISOString())
+    .order('due_at', { ascending: true })
+    .limit(REMINDER_RECONCILE_LIMIT);
+  if (error) throw new Error('Upcoming task reminders could not be checked.');
+  return (data ?? []) as ReminderTask[];
+}
+
+export async function getReminderTasksByIds(
+  userId: string,
+  ids: string[],
+): Promise<ReminderTask[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await getSupabaseClient()
+    .from('tasks')
+    .select(reminderFields)
+    .eq('user_id', userId)
+    .in('id', ids.slice(0, REMINDER_RECONCILE_LIMIT));
+  if (error) throw new Error('Scheduled task reminders could not be checked.');
+  return (data ?? []) as ReminderTask[];
 }
 
 export async function createTask(
