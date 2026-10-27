@@ -59,6 +59,7 @@ export function TaskNotificationLifecycle({ ownerId }: { ownerId: string }) {
       });
     };
     const handle = (response: Notifications.NotificationResponse) => {
+      if (!taskIdFromNotification(response, ownerId)) return;
       const id = response.notification.request.identifier;
       if (lastResponse.current === id) return;
       lastResponse.current = id;

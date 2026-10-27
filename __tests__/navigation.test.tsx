@@ -27,7 +27,7 @@ describe('application shell', () => {
   it('opens Today, navigates across tabs, and reaches Settings from the profile entry', async () => {
     await renderRouter('./app');
 
-    expect(await screen.findByText('Nothing due today.')).toBeTruthy();
+    expect(await screen.findByText('No tasks due today.')).toBeTruthy();
     for (const name of ['Today', 'Tasks', 'Money', 'Workout', 'AI']) {
       expect(screen.getByLabelText(`${name} tab`)).toBeTruthy();
     }

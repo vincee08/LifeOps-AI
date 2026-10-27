@@ -25,6 +25,7 @@ import {
   type TodayWindow,
 } from '@/features/today/today-model';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { TodayBills } from '@/features/today/TodayBills';
 
 const sections: TodaySection[] = ['overdue', 'today', 'completed'];
 type SectionData = Record<TodaySection, TodayTaskPage | null>;
@@ -216,7 +217,7 @@ export function TodayScreen() {
       <View style={{ gap: theme.spacing.sm }}>
         <AppText tone="mutedText">{heading}</AppText>
         <AppText variant="display">Today</AppText>
-        <AppText tone="mutedText">Your tasks for this day.</AppText>
+        <AppText tone="mutedText">Your tasks and bills for this day.</AppText>
       </View>
       <AppButton
         label="View all tasks"
@@ -247,7 +248,7 @@ export function TodayScreen() {
                     }}
                   >
                     <AppText style={{ fontWeight: '700' }}>
-                      {data[section]!.total}{' '}
+                      {data[section]!.total} {data[section]!.total === 1 ? 'task' : 'tasks'}{' '}
                       {section === 'today'
                         ? 'due today'
                         : section === 'overdue'
@@ -281,11 +282,7 @@ export function TodayScreen() {
                 ) : null}
                 {page?.total === 0 && section === 'today' ? (
                   <EmptyState
-                    title={
-                      data.completed?.total && !data.overdue?.total
-                        ? 'All caught up for today'
-                        : 'Nothing due today.'
-                    }
+                    title="No tasks due today."
                     description="Tasks with a due time today appear here."
                   />
                 ) : null}
@@ -315,6 +312,7 @@ export function TodayScreen() {
               </View>
             );
           })}
+          <TodayBills window={window} />
         </>
       ) : null}
     </Screen>

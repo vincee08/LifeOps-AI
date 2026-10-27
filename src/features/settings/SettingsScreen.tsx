@@ -16,6 +16,13 @@ import {
   taskRemindersEnabled,
 } from '@/features/tasks/task-notifications';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import {
+  billRemindersEnabled,
+  billReminderWarning,
+  reconcileUpcomingBillReminders,
+  requestBillNotificationPermission,
+  setBillRemindersEnabled,
+} from '@/features/money/bill-notifications';
 
 export function SettingsScreen() {
   const theme = useAppTheme();
@@ -36,6 +43,9 @@ export function SettingsScreen() {
   >('undetermined');
   const [reminderBusy, setReminderBusy] = useState(false);
   const [reminderMessage, setReminderMessage] = useState('');
+  const [billRemindersOn, setBillRemindersOn] = useState(true);
+  const [billReminderBusy, setBillReminderBusy] = useState(false);
+  const [billReminderMessage, setBillReminderMessage] = useState('');
 
   useEffect(() => {
     if (!userId) return;
@@ -64,12 +74,14 @@ export function SettingsScreen() {
     let active = true;
     const load = async () => {
       try {
-        const [enabled, status] = await Promise.all([
+        const [enabled, billEnabled, status] = await Promise.all([
           taskRemindersEnabled(userId),
+          billRemindersEnabled(userId),
           getNotificationPermissionStatus(),
         ]);
         if (active) {
           setRemindersOn(enabled);
+          setBillRemindersOn(billEnabled);
           setPermission(status);
         }
       } catch {
@@ -118,6 +130,58 @@ export function SettingsScreen() {
     }
     const result = await reconcileUpcomingTaskReminders(userId);
     setReminderMessage(reminderWarning(result) || 'Task reminders are enabled.');
+    try {
+      if (await billRemindersEnabled(userId)) {
+        const bills = await reconcileUpcomingBillReminders(userId);
+        setBillReminderMessage(billReminderWarning(bills));
+      }
+    } catch {
+      setBillReminderMessage('Bill reminders could not be checked. Try again.');
+    }
+  }
+
+  async function changeBillReminders(enabled: boolean) {
+    if (!userId || billReminderBusy) return;
+    setBillReminderBusy(true);
+    setBillReminderMessage('');
+    try {
+      const result = await setBillRemindersEnabled(userId, enabled);
+      if (result.status === 'error') {
+        setBillReminderMessage('Bill reminder settings could not be confirmed. Try again.');
+        return;
+      }
+      setBillRemindersOn(enabled);
+      if (enabled) {
+        const status = await requestBillNotificationPermission();
+        setPermission(status);
+        if (status === 'granted') {
+          const scheduled = await reconcileUpcomingBillReminders(userId);
+          setBillReminderMessage(billReminderWarning(scheduled) || 'Bill reminders are enabled.');
+        } else
+          setBillReminderMessage(
+            'Notifications are disabled on this device. Bills still save normally.',
+          );
+      } else
+        setBillReminderMessage('Bill reminders are off. Pending bill reminders were canceled.');
+    } catch {
+      setBillReminderMessage('Bill reminder settings could not be saved. Try again.');
+    } finally {
+      setBillReminderBusy(false);
+    }
+  }
+
+  async function allowBillNotifications() {
+    if (!userId) return;
+    const status = await requestBillNotificationPermission();
+    setPermission(status);
+    if (status !== 'granted') {
+      setBillReminderMessage(
+        'Notifications are disabled on this device. Enable them in device settings.',
+      );
+      return;
+    }
+    const result = await reconcileUpcomingBillReminders(userId);
+    setBillReminderMessage(billReminderWarning(result) || 'Bill reminders are enabled.');
   }
 
   async function save() {
@@ -131,6 +195,14 @@ export function SettingsScreen() {
       setDisplayName(result.display_name ?? '');
       setTimezone(result.timezone);
       setNotice('Profile saved.');
+      try {
+        if (await billRemindersEnabled(userId)) {
+          const reminders = await reconcileUpcomingBillReminders(userId);
+          setBillReminderMessage(billReminderWarning(reminders));
+        }
+      } catch {
+        setBillReminderMessage('Bill reminders could not be checked after the timezone change.');
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Profile could not be saved.');
     } finally {
@@ -253,6 +325,38 @@ export function SettingsScreen() {
               ) : null}
               {reminderMessage ? (
                 <AppText accessibilityRole="alert">{reminderMessage}</AppText>
+              ) : null}
+            </View>
+            <View style={{ gap: theme.spacing.sm }}>
+              <AppText variant="title">Bill reminders</AppText>
+              <AppText>Bill reminders: {billRemindersOn ? 'On' : 'Off'}</AppText>
+              <AppText tone="mutedText">
+                When on, unpaid bills can remind you at 9:00 AM in your profile timezone, two days
+                before, one day before, and on the due date.
+              </AppText>
+              <AppButton
+                label={billRemindersOn ? 'Turn bill reminders off' : 'Turn bill reminders on'}
+                variant="secondary"
+                submitting={billReminderBusy}
+                onPress={() => void changeBillReminders(!billRemindersOn)}
+              />
+              {billRemindersOn && permission === 'undetermined' ? (
+                <AppButton
+                  label="Allow bill notifications"
+                  variant="secondary"
+                  disabled={billReminderBusy}
+                  onPress={() => void allowBillNotifications()}
+                />
+              ) : null}
+              {billRemindersOn && permission === 'denied' && Platform.OS !== 'web' ? (
+                <AppButton
+                  label="Open device notification settings for bills"
+                  variant="secondary"
+                  onPress={() => void Linking.openSettings()}
+                />
+              ) : null}
+              {billReminderMessage ? (
+                <AppText accessibilityRole="alert">{billReminderMessage}</AppText>
               ) : null}
             </View>
             {error ? (

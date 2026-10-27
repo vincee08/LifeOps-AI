@@ -38,6 +38,7 @@ jest.mock('@/features/tasks/task-reminder-commands', () => ({
 jest.mock('@/features/tasks/task-notifications', () => ({
   reminderWarning: () => '',
 }));
+jest.mock('@/features/today/TodayBills', () => ({ TodayBills: () => null }));
 
 const due: Task = {
   id: 'due-id',
@@ -84,9 +85,9 @@ it('shows a loading state while profile data is pending', async () => {
 it('shows an empty state and counts from exact task pages', async () => {
   mockList.mockResolvedValue(page([]));
   await render(<TodayScreen />);
-  expect(await screen.findByText('Nothing due today.')).toBeTruthy();
-  expect(screen.getByText('0 due today')).toBeTruthy();
-  expect(screen.getByText('0 overdue')).toBeTruthy();
+  expect(await screen.findByText('No tasks due today.')).toBeTruthy();
+  expect(screen.getByText('0 tasks due today')).toBeTruthy();
+  expect(screen.getByText('0 tasks overdue')).toBeTruthy();
   await press('View all tasks');
   expect(mockNavigate).toHaveBeenCalledWith('/(tabs)/tasks');
 });
@@ -97,11 +98,11 @@ it('shows a partial section failure and retries without inventing its count', as
   );
   await render(<TodayScreen />);
   expect(await screen.findByText('Overdue unavailable')).toBeTruthy();
-  expect(screen.getByText('0 due today')).toBeTruthy();
-  expect(screen.queryByText('0 overdue')).toBeNull();
+  expect(screen.getByText('0 tasks due today')).toBeTruthy();
+  expect(screen.queryByText('0 tasks overdue')).toBeNull();
   mockList.mockResolvedValue(page([]));
   await press('Try again');
-  expect(await screen.findByText('0 overdue')).toBeTruthy();
+  expect(await screen.findByText('0 tasks overdue')).toBeTruthy();
 });
 
 it('completes and reopens through the Tasks service and opens the Tasks editor', async () => {
@@ -119,17 +120,17 @@ it('completes and reopens through the Tasks service and opens the Tasks editor',
   });
   await render(<TodayScreen />);
   expect(await screen.findByText('Prepare notes')).toBeTruthy();
-  expect(screen.getByText('1 due today')).toBeTruthy();
+  expect(screen.getByText('1 task due today')).toBeTruthy();
   await press('Open Prepare notes in Tasks');
   expect(mockNavigate).toHaveBeenCalledWith({
     pathname: '/(tabs)/tasks',
     params: { editTaskId: 'due-id' },
   });
   await press('Complete Prepare notes');
-  await waitFor(() => expect(screen.getByText('1 completed today')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('1 task completed today')).toBeTruthy());
   expect(mockComplete).toHaveBeenCalledWith('owner', 'due-id', true);
   await press('Reopen Prepare notes');
-  await waitFor(() => expect(screen.getByText('1 due today')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('1 task due today')).toBeTruthy());
   expect(mockComplete).toHaveBeenCalledWith('owner', 'due-id', false);
 });
 

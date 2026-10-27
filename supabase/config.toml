@@ -20,3 +20,6 @@ enable_confirmations = true
 
 [experimental]
 stack = true
+
+[functions.bills]
+verify_jwt = true

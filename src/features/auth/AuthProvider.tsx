@@ -11,6 +11,7 @@ import {
 
 import { parseAuthCallback, restoreSession } from '@/features/auth/auth-service';
 import { cancelAllTaskReminders } from '@/features/tasks/task-notifications';
+import { cancelBillReminders } from '@/features/money/bill-notifications';
 import { getSupabaseClient } from '@/lib/supabase';
 
 type AuthState =
@@ -143,6 +144,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
           const cancellation = await cancelAllTaskReminders(state.session.user.id);
           if (cancellation.status === 'error')
             throw new Error('Task reminders could not be canceled. Try signing out again.');
+          const billCancellation = await cancelBillReminders(state.session.user.id);
+          if (billCancellation.status === 'error')
+            throw new Error('Bill reminders could not be canceled. Try signing out again.');
         }
         const { error } = await getSupabaseClient().auth.signOut();
         if (error) throw error;
