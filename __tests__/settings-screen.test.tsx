@@ -56,6 +56,7 @@ it('shows a recoverable profile loading error', async () => {
 it('lets the owner turn local task reminders off', async () => {
   await render(<SettingsScreen />);
   await waitFor(() => expect(screen.getByText('Task reminders: On')).toBeTruthy());
+  expect(screen.queryByText('Bill reminders')).toBeNull();
   fireEvent.press(screen.getByText('Turn task reminders off'));
   await waitFor(() => expect(screen.getByText('Task reminders: Off')).toBeTruthy());
   expect(screen.getByText('Task reminders are off. Pending reminders were canceled.')).toBeTruthy();

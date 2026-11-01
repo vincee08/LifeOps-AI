@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, AppState, Platform, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
+import { cleanupLegacyAndroidTaskChannel } from '@/features/notifications/legacy-bill-cleanup';
 import {
   reconcileUpcomingTaskReminders,
   taskIdFromNotification,
@@ -49,13 +50,21 @@ export function TaskNotificationLifecycle({ ownerId }: { ownerId: string }) {
     if (Platform.OS === 'web') return;
     let active = true;
     const reconcile = () => {
-      void reconcileUpcomingTaskReminders(ownerId).then((result) => {
-        if (active)
-          setWarning(
-            result.status === 'error'
-              ? 'Task reminders could not be checked. Open Settings to retry.'
-              : '',
-          );
+      void (async () => {
+        const result = await reconcileUpcomingTaskReminders(ownerId);
+        if (result.status === 'error') throw new Error('Task reconciliation failed.');
+        try {
+          await cleanupLegacyAndroidTaskChannel();
+        } catch {
+          if (active)
+            setWarning(
+              'Old Task notification channel could not be cleared. Reopen the app to retry.',
+            );
+          return;
+        }
+        if (active) setWarning('');
+      })().catch(() => {
+        if (active) setWarning('Task reminders could not be checked. Reopen the app to retry.');
       });
     };
     const handle = (response: Notifications.NotificationResponse) => {

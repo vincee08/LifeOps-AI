@@ -28,9 +28,12 @@ describe('application shell', () => {
     await renderRouter('./app');
 
     expect(await screen.findByText('No tasks due today.')).toBeTruthy();
-    for (const name of ['Today', 'Tasks', 'Money', 'Workout', 'AI']) {
+    for (const name of ['Today', 'Tasks', 'Workout']) {
       expect(screen.getByLabelText(`${name} tab`)).toBeTruthy();
     }
+    expect(screen.queryByLabelText('Money tab')).toBeNull();
+    expect(screen.queryByLabelText('AI tab')).toBeNull();
+    expect(screen.queryByLabelText('Bills tab')).toBeNull();
     await userEvent.press(screen.getByLabelText('View all tasks'));
     expect(screen.getByText('Keep your next steps in one place.')).toBeTruthy();
 

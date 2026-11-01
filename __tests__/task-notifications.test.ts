@@ -20,6 +20,7 @@ import {
   setTaskCompletedWithReminders,
 } from '@/features/tasks/task-reminder-commands';
 import { openTaskNotification } from '@/features/tasks/TaskNotificationLifecycle';
+import { cleanupLegacyAndroidTaskChannel } from '@/features/notifications/legacy-bill-cleanup';
 
 const mockCreate = jest.fn();
 const mockEdit = jest.fn();
@@ -63,6 +64,11 @@ const mockCancel = jest.fn(async (id: string) => {
   const index = pending.findIndex((request) => request.identifier === id);
   if (index >= 0) pending.splice(index, 1);
 });
+const mockGetChannels = jest.fn(async () => [
+  { id: 'task-reminders' },
+  { id: 'task-reminders-v2' },
+]);
+const mockDeleteChannel = jest.fn(async (_id: string) => undefined);
 jest.mock('expo-notifications', () => ({
   AndroidImportance: { DEFAULT: 5 },
   SchedulableTriggerInputTypes: { DATE: 'date' },
@@ -74,6 +80,8 @@ jest.mock('expo-notifications', () => ({
   cancelScheduledNotificationAsync: (id: string) => mockCancel(id),
   setNotificationChannelAsync: (id: string, options: { name: string; importance: number }) =>
     mockChannel(id, options),
+  getNotificationChannelsAsync: () => mockGetChannels(),
+  deleteNotificationChannelAsync: (id: string) => mockDeleteChannel(id),
   setNotificationHandler: jest.fn(),
 }));
 
@@ -210,7 +218,7 @@ it('migrates pending Android reminders from the old channel without duplicates',
     await reconcileTaskReminders(task);
     for (const request of pending) {
       request.trigger = { ...(request.trigger as object), channelId: 'task-reminders' };
-      delete request.content.data?.channelId;
+      // The data may already claim v2 while the actual trigger still uses v1.
     }
     mockReminderByIds.mockResolvedValueOnce([task]);
     mockUpcoming.mockResolvedValueOnce([task]);
@@ -219,13 +227,64 @@ it('migrates pending Android reminders from the old channel without duplicates',
     expect(mockSchedule).toHaveBeenCalledTimes(6);
     expect(pending).toHaveLength(3);
     expect(
-      pending.every((request) => request.content.data?.channelId === 'task-reminders-v2'),
+      pending.every(
+        (request) =>
+          request.content.data?.channelId === 'task-reminders-v2' &&
+          (request.trigger as { channelId: string }).channelId === 'task-reminders-v2',
+      ),
     ).toBe(true);
+    await cleanupLegacyAndroidTaskChannel();
+    expect(mockDeleteChannel).toHaveBeenCalledWith('task-reminders');
     mockReminderByIds.mockResolvedValueOnce([task]);
     mockUpcoming.mockResolvedValueOnce([task]);
     await reconcileUpcomingTaskReminders('owner');
     expect(mockSchedule).toHaveBeenCalledTimes(6);
     expect(pending).toHaveLength(3);
+  } finally {
+    Object.defineProperty(Platform, 'OS', { value: original, configurable: true });
+  }
+});
+
+it('reconciles old-channel requests beyond the normal startup batch before channel deletion', async () => {
+  const original = Platform.OS;
+  Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
+  try {
+    await reconcileTaskReminders(task);
+    pending[0]!.trigger = { ...(pending[0]!.trigger as object), channelId: 'task-reminders' };
+    for (let index = 0; index < 100; index++) {
+      pending.push({
+        identifier: `lifeops-task-reminder-v1:owner:stale-${index}:60`,
+        content: {
+          title: 'Stale task',
+          body: 'Due in 1 hour.',
+          data: {
+            kind: 'lifeops-task-reminder-v1',
+            ownerId: 'owner',
+            taskId: `stale-${index}`,
+            offset: 60,
+            dueAt: task.due_at,
+            channelId: 'task-reminders-v2',
+          },
+        },
+        trigger: { channelId: 'task-reminders' },
+      });
+    }
+    mockReminderByIds.mockImplementation(async (_owner: string, ids: string[]) =>
+      ids.includes(task.id) ? [task] : [],
+    );
+    mockUpcoming.mockResolvedValue([task]);
+
+    await reconcileUpcomingTaskReminders('owner');
+    await cleanupLegacyAndroidTaskChannel();
+
+    expect(mockReminderByIds).toHaveBeenCalledTimes(2);
+    expect(pending).toHaveLength(3);
+    expect(
+      pending.every(
+        (request) => (request.trigger as { channelId: string }).channelId === 'task-reminders-v2',
+      ),
+    ).toBe(true);
+    expect(mockDeleteChannel).toHaveBeenCalledWith('task-reminders');
   } finally {
     Object.defineProperty(Platform, 'OS', { value: original, configurable: true });
   }

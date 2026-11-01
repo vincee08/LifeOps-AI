@@ -13,7 +13,8 @@ import {
 export const TASK_REMINDER_OFFSETS = [60, 30, 5] as const;
 // Android channel sound settings cannot be changed after creation. Use a fresh
 // channel for the system sound instead of the old channel's invalid custom sound.
-const CHANNEL_ID = 'task-reminders-v2';
+export const TASK_REMINDER_CHANNEL_ID = 'task-reminders-v2';
+export const LEGACY_TASK_REMINDER_CHANNEL_ID = 'task-reminders';
 const KIND = 'lifeops-task-reminder-v1';
 const PREFIX = 'lifeops-task-reminder-v1:';
 const MAX_MANAGED_REQUESTS = REMINDER_RECONCILE_LIMIT * TASK_REMINDER_OFFSETS.length;
@@ -73,7 +74,7 @@ export async function requestNotificationPermission(): Promise<
   if (Platform.OS === 'web') return 'unavailable';
   try {
     // Android 13 waits for a channel before it can display the permission prompt.
-    await channel();
+    await ensureTaskReminderChannel();
     const current = await Notifications.getPermissionsAsync();
     if (current.granted) return 'granted';
     if (!current.canAskAgain) return 'denied';
@@ -112,9 +113,9 @@ function body(offset: number) {
   return `Due in ${offset === 60 ? '1 hour' : `${offset} minutes`}.`;
 }
 
-async function channel() {
+export async function ensureTaskReminderChannel(): Promise<void> {
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
+    await Notifications.setNotificationChannelAsync(TASK_REMINDER_CHANNEL_ID, {
       name: 'Task Reminders',
       importance: AndroidImportance.DEFAULT,
     });
@@ -155,7 +156,11 @@ async function reconcileOne(
       slot &&
       request.identifier === expectedId &&
       request.content.data.dueAt === task.due_at &&
-      (Platform.OS !== 'android' || request.content.data.channelId === CHANNEL_ID) &&
+      (Platform.OS !== 'android' ||
+        (request.content.data.channelId === TASK_REMINDER_CHANNEL_ID &&
+          request.trigger &&
+          'channelId' in request.trigger &&
+          request.trigger.channelId === TASK_REMINDER_CHANNEL_ID)) &&
       request.content.title === task.title &&
       request.content.body === body(slot.offset);
     // If an older version created duplicates, keep one matching request only.
@@ -169,7 +174,7 @@ async function reconcileOne(
   if (!allowed) return { status: 'off', count: 0 };
   if (permission !== 'granted')
     return { status: permission === 'unavailable' ? 'unavailable' : 'permission-denied', count: 0 };
-  await channel();
+  await ensureTaskReminderChannel();
   for (const slot of desired) {
     const id = requestId(task, slot.offset);
     if (kept.has(slot.offset)) {
@@ -190,13 +195,13 @@ async function reconcileOne(
           taskId: task.id,
           offset: slot.offset,
           dueAt: task.due_at,
-          ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
+          ...(Platform.OS === 'android' ? { channelId: TASK_REMINDER_CHANNEL_ID } : {}),
         },
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
         date: new Date(slot.at),
-        ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
+        ...(Platform.OS === 'android' ? { channelId: TASK_REMINDER_CHANNEL_ID } : {}),
       },
     });
     count++;
@@ -279,20 +284,37 @@ export function reconcileUpcomingTaskReminders(ownerId: string): Promise<Reminde
         await cancel(owned);
         return { status: 'off', count: 0 };
       }
-      const ids = [
+      const usualIds = [
         ...new Set(
           owned.slice(0, MAX_MANAGED_REQUESTS).map((request) => request.content.data.taskId),
         ),
       ].slice(0, REMINDER_RECONCILE_LIMIT);
-      const [byIds, upcoming] = await Promise.all([
-        getReminderTasksByIds(ownerId, ids),
-        listUpcomingReminderTasks(ownerId, new Date().toISOString()),
-      ]);
+      // Include every old-channel request, even beyond the normal bounded
+      // startup sample, before the channel can be retired.
+      const legacyIds = owned
+        .filter((request) =>
+          request.trigger && 'channelId' in request.trigger
+            ? request.trigger.channelId === LEGACY_TASK_REMINDER_CHANNEL_ID
+            : request.content.data.channelId === LEGACY_TASK_REMINDER_CHANNEL_ID,
+        )
+        .map((request) => request.content.data.taskId);
+      const ids = [...new Set([...usualIds, ...legacyIds])];
+      const byIds: ReminderTask[] = [];
+      for (let start = 0; start < ids.length; start += REMINDER_RECONCILE_LIMIT) {
+        byIds.push(
+          ...(await getReminderTasksByIds(
+            ownerId,
+            ids.slice(start, start + REMINDER_RECONCILE_LIMIT),
+          )),
+        );
+      }
+      const upcoming = await listUpcomingReminderTasks(ownerId, new Date().toISOString());
       const tasks = new Map([...byIds, ...upcoming].map((task) => [task.id, task]));
+      const checkedIds = new Set(ids);
       await cancel(
         owned.filter(
           (request) =>
-            ids.includes(request.content.data.taskId) && !tasks.has(request.content.data.taskId),
+            checkedIds.has(request.content.data.taskId) && !tasks.has(request.content.data.taskId),
         ),
       );
       let result: ReminderResult = { status: 'none', count: 0 };

@@ -38,7 +38,6 @@ jest.mock('@/features/tasks/task-reminder-commands', () => ({
 jest.mock('@/features/tasks/task-notifications', () => ({
   reminderWarning: () => '',
 }));
-jest.mock('@/features/today/TodayBills', () => ({ TodayBills: () => null }));
 
 const due: Task = {
   id: 'due-id',
@@ -86,6 +85,7 @@ it('shows an empty state and counts from exact task pages', async () => {
   mockList.mockResolvedValue(page([]));
   await render(<TodayScreen />);
   expect(await screen.findByText('No tasks due today.')).toBeTruthy();
+  expect(screen.queryByText(/bills/i)).toBeNull();
   expect(screen.getByText('0 tasks due today')).toBeTruthy();
   expect(screen.getByText('0 tasks overdue')).toBeTruthy();
   await press('View all tasks');

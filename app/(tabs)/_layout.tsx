@@ -53,20 +53,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="money"
-        options={{
-          title: 'Money',
-          tabBarAccessibilityLabel: 'Money tab',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'wallet' : 'wallet-outline'}
-              color={typeof color === 'string' ? color : theme.colors.mutedText}
-              size={size}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="workout"
         options={{
           title: 'Workout',
@@ -74,20 +60,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? 'barbell' : 'barbell-outline'}
-              color={typeof color === 'string' ? color : theme.colors.mutedText}
-              size={size}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="ai"
-        options={{
-          title: 'AI',
-          tabBarAccessibilityLabel: 'AI tab',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'sparkles' : 'sparkles-outline'}
               color={typeof color === 'string' ? color : theme.colors.mutedText}
               size={size}
             />

@@ -4,10 +4,10 @@ These rules apply to every future change. Before changing a subsystem, read this
 
 ## Product boundaries
 
-- LifeOps AI is a personal productivity and life-management app. **Today and Tasks lead**; Bills, Debts, Expenses, Budgets, Work, and Workout support them. AI assists but must never be required for core flows.
-- Bottom tabs: **Today, Tasks, Money, Workout, AI**. Money contains Bills, Debts, Expenses, and Budgets. Work tasks and Projects live inside Tasks; Settings belongs in the profile/menu. Keep entry quick and navigation simple.
-- LifeOps AI never lends, arranges borrowing, accepts loan applications or payments, scores credit, moves money, or offers banking, payment processing, investments, or enterprise accounting. Debt tracking covers only existing outside obligations. “Paid” means the user reports an outside payment.
-- Derive Today from owner-scoped source records. Do not duplicate them in a separate Today table or create shadow bills for debt dues without a documented technical need.
+- LifeOps AI is a personal productivity and life-management app. Its core trackers are **Tasks, Loans, and Workouts**. Today and Tasks lead the current app. Loans and Workouts are planned milestones; Tasks is implemented.
+- Current bottom tabs are **Today, Tasks, Workout**. Loans gets navigation when its tracker ships. Settings/Profile is reached from the header. Keep entry quick and navigation simple. Bills, Money, and AI are outside the final product scope.
+- LifeOps AI never lends, arranges borrowing, accepts loan applications or payments, scores credit, moves money, or offers banking or payment processing. The planned Loans tracker records only existing outside obligations. “Paid” means the user reports an outside payment.
+- Derive Today from owner-scoped source records. Today currently reads Tasks only. Do not duplicate records in a separate Today table.
 
 ## Security and data access
 
@@ -17,19 +17,17 @@ These rules apply to every future change. Before changing a subsystem, read this
 - Never log passwords, auth tokens, API keys, sensitive financial details, AI private content, or private proof URLs. Keep proof objects private and use short-lived owner-authorized access where needed.
 - Retain user histories and AI conversations until the user deletes them; delete private proof objects when their proof, workout, or account is permanently deleted. Do not keep unnecessary private provider/debug logs.
 
-## Money, bills, and debts
+## Future Loans tracker
 
 - MVP currency is PHP. Parse peso input exactly; store and calculate integer centavos, and transport amounts as base-10 integer strings. Never use floating-point arithmetic for authoritative money, convert currencies, or combine currencies into one total. Deterministic domain code owns balances, spending, and budgets; AI does not.
-- Track debt from the user's entered current balance, outside payments, and explicit manual adjustments. Do not automatically accrue interest or penalties. Show payoff estimates only from current tracked balance, fixed planned amount, and frequency, with assumptions and an **estimate** label.
-- Marking a bill paid or recording a debt payment **never** creates an expense automatically. An optional expense is default-off and requires explicit confirmation through the normal transaction service. Show likely existing expenses and permit linking one; enforce one owner-matched posted expense per source, unique/idempotent creation, and no silent spending changes on correction or deletion.
+- Track an existing loan from the user's entered current balance, outside payments, and explicit manual adjustments. Do not automatically accrue interest or penalties. Show payoff estimates only from current tracked balance, fixed planned amount, and frequency, with assumptions and an **estimate** label.
 - Use database transactions for dependent financial writes. Make critical writes safe under retries and concurrency; never report success before persistence succeeds.
-- Bills and debt dues are trackers and reminders, not payment services. Default reminders run at 09:00 in the user's IANA timezone, **2, 1, and 0 local calendar days** before due. Document recurrence/calendar rules, make scheduling idempotent, and reconcile obsolete pending reminders after due-date, timezone, status, payoff, or archive changes. Show permission, token, provider, or OS scheduling failures; never claim a reminder was scheduled when it was not.
+- Loan due dates are trackers and reminders, not payment services. Design their reminder rules during the Loans milestone. Show permission, token, provider, or OS scheduling failures; never claim a reminder was scheduled when it was not.
 
-## Tasks, workouts, and AI
+## Tasks and workouts
 
 - Tasks are a core domain for personal and work responsibilities; reuse them for Projects/Work. Focus timers use persisted timestamps and recover after routine backgrounding or restart where practical.
 - ProofMode uses a server-generated random, short-lived, single-use challenge bound to the correct owner, workout, and session. Accepted attempts use direct camera capture, never a gallery image; compress uploads and keep proof images private. Do not perform face recognition or automatically send images to AI providers. The MVP status **“Proof captured”** confirms technical challenge/upload checks only: it does not verify the pictured gesture or make cheating impossible. Describe the feature as accountability-oriented or tamper-resistant.
-- Keep AI provider-neutral and optional; choose a provider only at the AI milestone after evaluating current low-cost options. AI reads only the minimum necessary owner-scoped data through controlled backend services; prefer summaries to full financial histories. AI cannot mutate records directly. Validate structured action proposals, fail closed on unknown/malformed/unauthorized output, require explicit user confirmation, and execute confirmed changes through the same tested domain services as manual UI.
 
 ## Implementation quality
 
