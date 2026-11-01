@@ -25,6 +25,7 @@ import {
   type TodayWindow,
 } from '@/features/today/today-model';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { TodayLoans } from '@/features/today/TodayLoans';
 
 const sections: TodaySection[] = ['overdue', 'today', 'completed'];
 type SectionData = Record<TodaySection, TodayTaskPage | null>;
@@ -216,7 +217,7 @@ export function TodayScreen() {
       <View style={{ gap: theme.spacing.sm }}>
         <AppText tone="mutedText">{heading}</AppText>
         <AppText variant="display">Today</AppText>
-        <AppText tone="mutedText">Your tasks for this day.</AppText>
+        <AppText tone="mutedText">Your tasks and loan dues for this day.</AppText>
       </View>
       <AppButton
         label="View all tasks"
@@ -313,6 +314,7 @@ export function TodayScreen() {
           })}
         </>
       ) : null}
+      {window ? <TodayLoans window={window} /> : null}
     </Screen>
   );
 }

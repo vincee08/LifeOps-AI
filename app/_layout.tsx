@@ -6,6 +6,7 @@ import { ErrorState, LoadingState } from '@/components/ui/StateView';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
 import { TaskNotificationLifecycle } from '@/features/tasks/TaskNotificationLifecycle';
 import { LegacyBillNotificationCleanup } from '@/features/notifications/LegacyBillNotificationCleanup';
+import { LoanNotificationLifecycle } from '@/features/loans/LoanNotificationLifecycle';
 import { useAppTheme } from '@/hooks/useAppTheme';
 
 export function ErrorBoundary({ retry }: ErrorBoundaryProps) {
@@ -62,7 +63,10 @@ function RootNavigator() {
     <>
       <StatusBar style={theme.mode === 'dark' ? 'light' : 'dark'} />
       {canUseApp && state.status === 'signed-in' ? (
-        <TaskNotificationLifecycle ownerId={state.session.user.id} />
+        <>
+          <TaskNotificationLifecycle ownerId={state.session.user.id} />
+          <LoanNotificationLifecycle ownerId={state.session.user.id} />
+        </>
       ) : null}
       <Stack
         screenOptions={{

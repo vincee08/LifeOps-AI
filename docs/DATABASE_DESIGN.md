@@ -2,9 +2,9 @@
 
 ## Active schema
 
-After all migrations, the active user-owned domain tables are `public.profiles` and `public.tasks`. `profiles.id` is the Auth user ID. Tasks has `user_id uuid`, server UUID ID, owner-scoped `client_request_id`, title, optional description and due instant, category, priority, completion timestamp, and timestamps. RLS and narrow grants restrict each user to their own rows. Task completion is server stamped. Indexes serve active, overdue, and completed lists. Today queries Tasks; there is no Today table or duplicate agenda record.
+After all migrations, the active user-owned domain tables are `public.profiles`, `public.tasks`, `public.loans`, and `public.loan_installments`. `profiles.id` is the Auth user ID. Tasks has `user_id uuid`, server UUID ID, owner-scoped `client_request_id`, title, optional description and due instant, category, priority, completion timestamp, and timestamps. Loan rows hold a name, monthly PHP amount as integer centavos, first due date, term, notes, and archive timestamp. A trigger creates exactly one installment per month from the original date anchor. Installments have owner-matched foreign keys, unique `(loan_id, installment_number)`, due date, historical amount, and nullable `paid_at`. Counts, next due, and status are derived, never stored as editable counters. Today queries Tasks and unpaid Loan installments; there is no Today table.
 
-The database retains the shared `app_private` schema and profile/task functions and types. The final schema contains no Bills table, view, function, policy, index, grant, trigger, or Bill-specific enum. The old Bills role remains inert: `NOLOGIN`, no private-schema usage, and no command function. It is kept out of the forward migration's DROP ROLE operations so historical migration replay stays deterministic.
+Both Loan tables use owner RLS and narrow grants. Clients can read Loan views that cast centavos to decimal strings; they cannot insert, delete, or directly update installments. `public.set_loan_installment_paid(uuid, boolean)` checks Auth identity, locks the owner loan, and changes paid state transactionally and idempotently. The shared `app_private` schema holds the Loan schedule and guard triggers. The final schema contains no Bills table, view, function, policy, index, grant, trigger, or Bill-specific enum. The old Bills role remains inert: `NOLOGIN`, no private-schema usage, and no command function.
 
 ## Migration sequence
 
@@ -14,9 +14,10 @@ The database retains the shared `app_private` schema and profile/task functions 
 4. `20261025133030_skip_unobserved_bill_cycles.sql`: historical recurrence change.
 5. `20261026024934_restore_missing_bill_cycles.sql`: historical recurrence repair.
 6. `20261030033936_remove_bills.sql`: forward retirement of all active Bills database objects.
+7. `20261101043249_create_loans.sql`: simplified Loan and installment tables, RLS, schedule triggers, read views, and payment-state function.
 
-The first five migration files are historical and remain unchanged. A clean local reset must apply them in order and end without Bills objects. The removal migration deletes existing Bills rows; back up hosted data before applying it if retention is required.
+The first six migration files are historical and remain unchanged. A clean local reset applies them in order, removes active Bills objects, then creates Loans. The Bills removal has already been deployed to the hosted project; the Loan migration has not.
 
-## Planned Loans and Workouts
+## Planned Workouts
 
-These domains have no tables in the current schema. At implementation, use owner-matched foreign keys, RLS on every user-owned table, least-privilege grants, and cross-user denial tests. Store PHP amounts as integer centavos and send them as base-10 integer strings. The Loans tracker will record a current balance, outside payments, and explicit adjustments without automatic interest. Workout proof objects will be private and removed when their proof, workout, or account is permanently deleted. Add indexes for observed access patterns and paginate growing histories.
+Workouts has no tables in the current schema. At implementation, use owner-matched foreign keys, RLS on every user-owned table, least-privilege grants, and cross-user denial tests. Workout proof objects will be private and removed when their proof, workout, or account is permanently deleted. Add indexes for observed access patterns and paginate growing histories.

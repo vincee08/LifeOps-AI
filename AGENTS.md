@@ -4,25 +4,25 @@ These rules apply to every future change. Before changing a subsystem, read this
 
 ## Product boundaries
 
-- LifeOps AI is a personal productivity and life-management app. Its core trackers are **Tasks, Loans, and Workouts**. Today and Tasks lead the current app. Loans and Workouts are planned milestones; Tasks is implemented.
-- Current bottom tabs are **Today, Tasks, Workout**. Loans gets navigation when its tracker ships. Settings/Profile is reached from the header. Keep entry quick and navigation simple. Bills, Money, and AI are outside the final product scope.
-- LifeOps AI never lends, arranges borrowing, accepts loan applications or payments, scores credit, moves money, or offers banking or payment processing. The planned Loans tracker records only existing outside obligations. “Paid” means the user reports an outside payment.
-- Derive Today from owner-scoped source records. Today currently reads Tasks only. Do not duplicate records in a separate Today table.
+- LifeOps AI is a personal productivity and life-management app. Its core trackers are **Tasks, Loans, and Workouts**. Tasks and the simplified Loans tracker are implemented locally; Workouts is the next milestone.
+- Current bottom tabs are **Today, Tasks, Loans, Workout**. Settings/Profile is reached from the header. Keep entry quick and navigation simple. Bills, Money, and AI are outside the final product scope.
+- LifeOps AI never lends, arranges borrowing, accepts loan applications or payments, scores credit, moves money, or offers banking or payment processing. The Loans tracker records only existing outside obligations. “Paid” means the user reports an outside payment.
+- Derive Today from owner-scoped Tasks and unpaid Loan installments. Do not duplicate records in a separate Today table.
 
 ## Security and data access
 
 - Never commit secrets, passwords, tokens, credentials, or private keys. Treat every `EXPO_PUBLIC_*` value as public. Supabase secret/service credentials and private AI keys stay server-side, outside the mobile bundle, source, logs, and snapshots.
-- Enable RLS on **every user-owned table**, including private-schema tables; grant clients only intended owner-scoped reads. Domain writes go through authenticated Edge Function commands and restricted private transactional functions. Use authorization policies for every private Storage object. Client filtering is never authorization. No user may read or mutate another user's data.
+- Enable RLS on **every user-owned table**, including private-schema tables; grant clients only the intended owner-scoped access. Tasks and Loans use narrow authenticated grants and owner RLS; dependent Loan installment state changes use an owner-checked transactional database function. Future domains may need authenticated Edge Function commands. Use authorization policies for every private Storage object. Client filtering is never authorization. No user may read or mutate another user's data.
 - Validate untrusted input at each trust boundary and enforce database constraints. Verify authentication and owner/parent ownership in backend commands; never trust a client-supplied owner ID or editable user metadata. Do not weaken authentication, RLS, authorization, or validation to make a feature work. Use least privilege for roles, functions, workers, and data access.
 - Never log passwords, auth tokens, API keys, sensitive financial details, AI private content, or private proof URLs. Keep proof objects private and use short-lived owner-authorized access where needed.
 - Retain user histories and AI conversations until the user deletes them; delete private proof objects when their proof, workout, or account is permanently deleted. Do not keep unnecessary private provider/debug logs.
 
-## Future Loans tracker
+## Simplified Loans tracker
 
 - MVP currency is PHP. Parse peso input exactly; store and calculate integer centavos, and transport amounts as base-10 integer strings. Never use floating-point arithmetic for authoritative money, convert currencies, or combine currencies into one total. Deterministic domain code owns balances, spending, and budgets; AI does not.
-- Track an existing loan from the user's entered current balance, outside payments, and explicit manual adjustments. Do not automatically accrue interest or penalties. Show payoff estimates only from current tracked balance, fixed planned amount, and frequency, with assumptions and an **estimate** label.
+- Track an existing outside obligation by name, fixed monthly PHP amount, first due date, and number of monthly installments. Derive paid and remaining months from installment state. Do not add balances, ledgers, interest, penalties, or payoff estimates to this milestone.
 - Use database transactions for dependent financial writes. Make critical writes safe under retries and concurrency; never report success before persistence succeeds.
-- Loan due dates are trackers and reminders, not payment services. Design their reminder rules during the Loans milestone. Show permission, token, provider, or OS scheduling failures; never claim a reminder was scheduled when it was not.
+- Loan due dates are trackers and reminders, not payment services. Local reminders are at 9:00 AM in the profile timezone, two and one calendar days before and on each unpaid due date. Show permission or OS scheduling failures; never claim a reminder was scheduled when it was not.
 
 ## Tasks and workouts
 

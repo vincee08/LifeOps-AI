@@ -53,6 +53,20 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="loans"
+        options={{
+          title: 'Loans',
+          tabBarAccessibilityLabel: 'Loans tab',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons
+              name={focused ? 'calendar' : 'calendar-outline'}
+              color={typeof color === 'string' ? color : theme.colors.mutedText}
+              size={size}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="workout"
         options={{
           title: 'Workout',

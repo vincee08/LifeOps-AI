@@ -28,7 +28,7 @@ describe('application shell', () => {
     await renderRouter('./app');
 
     expect(await screen.findByText('No tasks due today.')).toBeTruthy();
-    for (const name of ['Today', 'Tasks', 'Workout']) {
+    for (const name of ['Today', 'Tasks', 'Loans', 'Workout']) {
       expect(screen.getByLabelText(`${name} tab`)).toBeTruthy();
     }
     expect(screen.queryByLabelText('Money tab')).toBeNull();

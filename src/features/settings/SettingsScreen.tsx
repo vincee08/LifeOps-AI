@@ -8,6 +8,13 @@ import { ErrorState, LoadingState } from '@/components/ui/StateView';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { loadProfile, updateProfile, type Profile } from '@/features/settings/profile-service';
 import {
+  loanReminderWarning,
+  loanRemindersEnabled,
+  reconcileUpcomingLoanReminders,
+  requestLoanNotificationPermission,
+  setLoanRemindersEnabled,
+} from '@/features/loans/loan-notifications';
+import {
   getNotificationPermissionStatus,
   reconcileUpcomingTaskReminders,
   reminderWarning,
@@ -36,6 +43,9 @@ export function SettingsScreen() {
   >('undetermined');
   const [reminderBusy, setReminderBusy] = useState(false);
   const [reminderMessage, setReminderMessage] = useState('');
+  const [loanRemindersOn, setLoanRemindersOn] = useState(true);
+  const [loanReminderBusy, setLoanReminderBusy] = useState(false);
+  const [loanReminderMessage, setLoanReminderMessage] = useState('');
 
   useEffect(() => {
     if (!userId) return;
@@ -64,13 +74,15 @@ export function SettingsScreen() {
     let active = true;
     const load = async () => {
       try {
-        const [enabled, status] = await Promise.all([
+        const [enabled, status, loanEnabled] = await Promise.all([
           taskRemindersEnabled(userId),
           getNotificationPermissionStatus(),
+          loanRemindersEnabled(userId),
         ]);
         if (active) {
           setRemindersOn(enabled);
           setPermission(status);
+          setLoanRemindersOn(loanEnabled);
         }
       } catch {
         if (active) setReminderMessage('Task reminder settings could not be loaded. Try again.');
@@ -120,6 +132,40 @@ export function SettingsScreen() {
     setReminderMessage(reminderWarning(result) || 'Task reminders are enabled.');
   }
 
+  async function changeLoanReminders(enabled: boolean) {
+    if (!userId || loanReminderBusy) return;
+    setLoanReminderBusy(true);
+    setLoanReminderMessage('');
+    try {
+      const result = await setLoanRemindersEnabled(userId, enabled);
+      if (result.status === 'error') {
+        setLoanReminderMessage(loanReminderWarning(result));
+        return;
+      }
+      setLoanRemindersOn(enabled);
+      if (enabled) {
+        const permissionResult = await requestLoanNotificationPermission();
+        setPermission(permissionResult);
+        if (permissionResult !== 'granted') {
+          setLoanReminderMessage(
+            'Device notifications are disabled. Enable them in device settings.',
+          );
+        } else {
+          setLoanReminderMessage(
+            loanReminderWarning(await reconcileUpcomingLoanReminders(userId)) ||
+              'Loan reminders are enabled.',
+          );
+        }
+      } else {
+        setLoanReminderMessage('Loan reminders are off. Pending loan reminders were canceled.');
+      }
+    } catch {
+      setLoanReminderMessage('Loan reminder settings could not be saved. Try again.');
+    } finally {
+      setLoanReminderBusy(false);
+    }
+  }
+
   async function save() {
     if (!userId || saving) return;
     setSaving(true);
@@ -131,6 +177,7 @@ export function SettingsScreen() {
       setDisplayName(result.display_name ?? '');
       setTimezone(result.timezone);
       setNotice('Profile saved.');
+      setLoanReminderMessage(loanReminderWarning(await reconcileUpcomingLoanReminders(userId)));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Profile could not be saved.');
     } finally {
@@ -253,6 +300,30 @@ export function SettingsScreen() {
               ) : null}
               {reminderMessage ? (
                 <AppText accessibilityRole="alert">{reminderMessage}</AppText>
+              ) : null}
+            </View>
+            <View style={{ gap: theme.spacing.sm }}>
+              <AppText variant="title">Loan reminders</AppText>
+              <AppText>Loan reminders: {loanRemindersOn ? 'On' : 'Off'}</AppText>
+              <AppText tone="mutedText">
+                At 9:00 AM, two days before, one day before, and on each unpaid monthly due date.
+              </AppText>
+              <AppButton
+                label={loanRemindersOn ? 'Turn loan reminders off' : 'Turn loan reminders on'}
+                variant="secondary"
+                submitting={loanReminderBusy}
+                onPress={() => void changeLoanReminders(!loanRemindersOn)}
+              />
+              {loanRemindersOn && permission === 'undetermined' ? (
+                <AppButton
+                  label="Allow loan notifications"
+                  variant="secondary"
+                  disabled={loanReminderBusy}
+                  onPress={() => void changeLoanReminders(true)}
+                />
+              ) : null}
+              {loanReminderMessage ? (
+                <AppText accessibilityRole="alert">{loanReminderMessage}</AppText>
               ) : null}
             </View>
             {error ? (

@@ -61,3 +61,14 @@ it('lets the owner turn local task reminders off', async () => {
   await waitFor(() => expect(screen.getByText('Task reminders: Off')).toBeTruthy());
   expect(screen.getByText('Task reminders are off. Pending reminders were canceled.')).toBeTruthy();
 });
+
+it('shows a separate Loan reminder setting without Bills', async () => {
+  await render(<SettingsScreen />);
+  await waitFor(() => expect(screen.getByText('Loan reminders: On')).toBeTruthy());
+  expect(screen.queryByText('Bill reminders')).toBeNull();
+  fireEvent.press(screen.getByText('Turn loan reminders off'));
+  await waitFor(() => expect(screen.getByText('Loan reminders: Off')).toBeTruthy());
+  expect(
+    screen.getByText('Loan reminders are off. Pending loan reminders were canceled.'),
+  ).toBeTruthy();
+});

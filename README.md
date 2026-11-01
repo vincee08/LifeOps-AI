@@ -1,8 +1,8 @@
 # LifeOps AI
 
-LifeOps AI is a personal productivity app built around Today and Tasks. Its final core trackers are **Tasks, Loans, and Workouts**. Tasks and authentication/profile are implemented. Loans and Workouts are planned; the Workout tab currently explains its upcoming milestone. Bills has been permanently retired.
+LifeOps AI is a personal productivity app with **Tasks, Loans, and Workouts** as its three core trackers. Tasks and authentication/profile are implemented. The simplified Loans tracker is implemented locally, pending hosted deployment and physical Android verification. Workout is the next milestone. Bills has been permanently retired.
 
-The current app has **Today, Tasks, and Workout** tabs, with Settings/Profile in the header. Today derives its three task sections from owner-scoped Tasks records. There is no Today table. Loan navigation and data will be added with the Loans milestone.
+The current app has **Today, Tasks, Loans, and Workout** tabs, with Settings/Profile in the header. Today derives task sections and unpaid Loan dues from owner-scoped source records. There is no Today table.
 
 ## Setup
 
@@ -31,7 +31,7 @@ Install the resulting APK on the phone, keep it connected to Metro, and rebuild 
 ## Local database and checks
 
 ```powershell
-npx supabase start
+npx supabase stack start
 npx supabase db reset --local --yes
 npx supabase test db --local
 npm run test:local-auth
@@ -42,22 +42,24 @@ npm run test:ci
 npx expo-doctor
 ```
 
-The local reset intentionally replays the three historical Bills migrations, then `20261030033936_remove_bills.sql`. The final schema has Tasks and profiles, with no active Bills objects. Historical migration files must remain unchanged. Never run a linked reset for this verification.
+The local reset intentionally replays the three historical Bills migrations, then `20261030033936_remove_bills.sql`, then `20261101043249_create_loans.sql`. The final schema has profiles, Tasks, Loans, and Loan installments, with no active Bills objects. Historical migration files remain unchanged. Never run a linked reset for this verification.
 
 Tasks supports title-only entry, optional details and timezone-aware deadlines, completion/reopen, filters, and confirmed deletion. Task reminders default to On per signed-in account on this device. Expo schedules future local notifications 60, 30, and 5 minutes before a task deadline. Editing or completing a task reconciles pending requests; sign-out cancels owned Task reminders. Settings has the Task reminders switch and notification permission guidance. Android uses the `task-reminders-v2` channel and its system sound. The OS may delay delivery.
 
+Loans stores a name, exact monthly PHP amount, first due date, installment count, and optional notes. Installments are generated once from the original date anchor; paid and remaining months and next due are derived. Users can mark paid, correct an accidental mark, edit while retaining paid history, and archive. A separate Loan reminders setting schedules local 9:00 AM notifications two and one calendar days before and on each unpaid due date. Android uses `loan-reminders-v2` with the system sound. Pending reminders are reconciled on startup, resume, account change, Loan changes, and Settings changes.
+
 On app startup, including signed-out sessions, the app cancels legacy scheduled Bills notifications identified by their old request ID, kind, or dedicated channel, deletes the old Android Bill channel, then removes retired device Bill reminder preferences. Android removes the old Task channel after signed-in reconciliation or signed-out cancellation clears its pending requests. The current Task channel, Task preferences, and unrelated channels remain intact. Cleanup failures show a warning and retry on resume. No Bills navigation, UI, service, or Edge Function source remains locally.
 
-## Hosted Bills retirement
+## Hosted Loans rollout
 
-This repository does not push migrations, deploy an app, delete hosted functions, or unset secrets automatically. After reviewing and backing up any historical Bills data that must be retained, an operator should:
+The Bills retirement migration, hosted function removal, and secret removal are complete. This repository does not push the Loan migration or deploy an app automatically. After review, an operator should:
 
-1. Verify the linked project and apply the reviewed removal migration with `npx supabase db push`.
-2. Delete the old hosted Edge Function with `npx supabase functions delete bills`.
-3. Unset the obsolete server-only secret with `npx supabase secrets unset BILLS_DATABASE_URL`.
-4. Inspect `lifeops_bill_commands` for external grants or ownership. Local replay showed zero shared object dependencies and one PostgreSQL `postgres` membership; no non-Bills application object uses it in these migrations. The migration changes it to `NOLOGIN` and revokes its private-schema access. Keep this inert cluster role for reproducible replay; consider manual removal only after a hosted dependency audit.
+1. Verify the intended hosted project and check `npx supabase migration list --linked`. Confirm `20261030033936` is applied and only `20261101043249` is pending.
+2. Preview with `npx supabase db push --linked --dry-run --skip-vault`, then apply the reviewed Loan migration with `npx supabase db push --linked --skip-vault`.
+3. Check `npx supabase migration list --linked`, inspect owner RLS and grants on both Loan tables, and confirm no active Bills objects.
+4. Run the physical Android procedure in [TEST_PLAN.md](docs/TEST_PLAN.md) against the intended Development project before a Production rollout.
 
-The retired function's hosted URL may still exist until step 2. The removal migration makes its command unavailable and disables new role logins. Removing data is irreversible, so export anything required before applying it.
+No Loan Edge Function, new secret, or native dependency is required.
 
 ## Repository map
 

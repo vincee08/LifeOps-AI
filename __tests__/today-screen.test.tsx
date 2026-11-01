@@ -3,6 +3,8 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { TodayScreen } from '@/features/today/TodayScreen';
 import type { Task } from '@/features/tasks/tasks-service';
 
+jest.mock('@/features/today/TodayLoans', () => ({ TodayLoans: () => null }));
+
 const mockNavigate = jest.fn();
 const mockRouter = { navigate: mockNavigate };
 const mockProfile = jest.fn();
