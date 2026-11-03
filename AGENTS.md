@@ -4,10 +4,10 @@ These rules apply to every future change. Before changing a subsystem, read this
 
 ## Product boundaries
 
-- LifeOps AI is a personal productivity and life-management app. Its core trackers are **Tasks, Loans, and Workouts**. Tasks and the simplified Loans tracker are implemented locally; Workouts is the next milestone.
+- LifeOps AI is a personal productivity and life-management app. Its core trackers are **Tasks, Loans, and Workouts**. Tasks and the simplified Loans tracker are deployed; Workouts Phase 1 is implemented locally pending review and rollout.
 - Current bottom tabs are **Today, Tasks, Loans, Workout**. Settings/Profile is reached from the header. Keep entry quick and navigation simple. Bills, Money, and AI are outside the final product scope.
 - LifeOps AI never lends, arranges borrowing, accepts loan applications or payments, scores credit, moves money, or offers banking or payment processing. The Loans tracker records only existing outside obligations. “Paid” means the user reports an outside payment.
-- Derive Today from owner-scoped Tasks and unpaid Loan installments. Do not duplicate records in a separate Today table.
+- Derive Today from owner-scoped Tasks, unpaid Loan installments, and Workout sessions. Do not duplicate records in a separate Today table.
 
 ## Security and data access
 

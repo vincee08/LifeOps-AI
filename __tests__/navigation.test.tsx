@@ -22,6 +22,7 @@ jest.mock('@/features/tasks/tasks-service', () => ({
   listTasks: jest.fn(async () => ({ tasks: [], hasMore: false })),
   listTodayTaskSection: jest.fn(async () => ({ tasks: [], total: 0, hasMore: false })),
 }));
+jest.mock('@/features/today/TodayWorkouts', () => ({ TodayWorkouts: () => null }));
 
 describe('application shell', () => {
   it('opens Today, navigates across tabs, and reaches Settings from the profile entry', async () => {

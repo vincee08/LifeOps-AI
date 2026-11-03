@@ -1,8 +1,8 @@
 # LifeOps AI
 
-LifeOps AI is a personal productivity app with **Tasks, Loans, and Workouts** as its three core trackers. Tasks and authentication/profile are implemented. The simplified Loans tracker is implemented locally, pending hosted deployment and physical Android verification. Workout is the next milestone. Bills has been permanently retired.
+LifeOps AI is a personal productivity app with **Tasks, Loans, and Workouts** as its three core trackers. Tasks, Loans, and authentication/profile are deployed. Workout Tracker Phase 1 is implemented locally, pending review, hosted migration, and physical Android verification. Bills has been permanently retired.
 
-The current app has **Today, Tasks, Loans, and Workout** tabs, with Settings/Profile in the header. Today derives task sections and unpaid Loan dues from owner-scoped source records. There is no Today table.
+The current app has **Today, Tasks, Loans, and Workout** tabs, with Settings/Profile in the header. Today derives task sections, unpaid Loan dues, and Workout sessions from owner-scoped source records. There is no Today table.
 
 ## Setup
 
@@ -42,7 +42,7 @@ npm run test:ci
 npx expo-doctor
 ```
 
-The local reset intentionally replays the three historical Bills migrations, then `20261030033936_remove_bills.sql`, then `20261101043249_create_loans.sql`. The final schema has profiles, Tasks, Loans, and Loan installments, with no active Bills objects. Historical migration files remain unchanged. Never run a linked reset for this verification.
+The local reset intentionally replays the three historical Bills migrations, then `20261030033936_remove_bills.sql`, `20261101043249_create_loans.sql`, and `20261102102736_create_workouts.sql`. The final schema has profiles, Tasks, Loans, Loan installments, and Workouts, with no active Bills objects. Historical migration files remain unchanged. Never run a linked reset for this verification.
 
 Tasks supports title-only entry, optional details and timezone-aware deadlines, completion/reopen, filters, and confirmed deletion. Task reminders default to On per signed-in account on this device. Expo schedules future local notifications 60, 30, and 5 minutes before a task deadline. Editing or completing a task reconciles pending requests; sign-out cancels owned Task reminders. Settings has the Task reminders switch and notification permission guidance. Android uses the `task-reminders-v2` channel and its system sound. The OS may delay delivery.
 
@@ -50,16 +50,18 @@ Loans stores a name, exact monthly PHP amount, first due date, installment count
 
 On app startup, including signed-out sessions, the app cancels legacy scheduled Bills notifications identified by their old request ID, kind, or dedicated channel, deletes the old Android Bill channel, then removes retired device Bill reminder preferences. Android removes the old Task channel after signed-in reconciliation or signed-out cancellation clears its pending requests. The current Task channel, Task preferences, and unrelated channels remain intact. Cleanup failures show a warning and retry on resume. No Bills navigation, UI, service, or Edge Function source remains locally.
 
-## Hosted Loans rollout
+## Workout Tracker Phase 1
 
-The Bills retirement migration, hosted function removal, and secret removal are complete. This repository does not push the Loan migration or deploy an app automatically. After review, an operator should:
+Phase 1 supports quick completed logs, one-time planned sessions without upfront measurements, a personal exercise library, repetitions, weighted repetitions in kg, durations in seconds, completion, corrections, deletion, paginated history and older plans, four-full-week activity, exercise records, and Today sections. Plans do not send notifications. Photo Proof is a required separate Phase 2 after core rollout and physical testing. Phase 2 will add direct in-app camera capture, short-lived single-use owner/session challenges, private Storage, owner viewing/deletion, upload retry and cleanup, and a new native development build. “Proof captured” will mean technical capture/upload checks only.
 
-1. Verify the intended hosted project and check `npx supabase migration list --linked`. Confirm `20261030033936` is applied and only `20261101043249` is pending.
-2. Preview with `npx supabase db push --linked --dry-run --skip-vault`, then apply the reviewed Loan migration with `npx supabase db push --linked --skip-vault`.
-3. Check `npx supabase migration list --linked`, inspect owner RLS and grants on both Loan tables, and confirm no active Bills objects.
-4. Run the physical Android procedure in [TEST_PLAN.md](docs/TEST_PLAN.md) against the intended Development project before a Production rollout.
+The linked Development migration list was read on 2026-11-02 and confirmed `20261101043249_create_loans.sql` is applied. Do not push it again. This repository does not push the new Workout migration or deploy an app automatically. After review, an operator should:
 
-No Loan Edge Function, new secret, or native dependency is required.
+1. Verify the intended hosted project and check `npx supabase migration list --linked`. Confirm `20261101043249` is applied and only `20261102102736` is pending.
+2. Preview with `npx supabase db push --linked --dry-run --skip-vault`, then apply only the reviewed Workout migration with `npx supabase db push --linked --skip-vault`.
+3. Recheck the migration list, inspect owner RLS and grants on all three Workout tables, and confirm no active Bills objects.
+4. Run the physical Android procedure in [TEST_PLAN.md](docs/TEST_PLAN.md) against Development before considering Production.
+
+Phase 1 needs no Edge Function, new secret, native dependency, or new EAS development build.
 
 ## Repository map
 

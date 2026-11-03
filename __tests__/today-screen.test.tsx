@@ -4,6 +4,7 @@ import { TodayScreen } from '@/features/today/TodayScreen';
 import type { Task } from '@/features/tasks/tasks-service';
 
 jest.mock('@/features/today/TodayLoans', () => ({ TodayLoans: () => null }));
+jest.mock('@/features/today/TodayWorkouts', () => ({ TodayWorkouts: () => null }));
 
 const mockNavigate = jest.fn();
 const mockRouter = { navigate: mockNavigate };
